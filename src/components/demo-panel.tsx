@@ -18,6 +18,7 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [blockedMsg, setBlockedMsg] = useState(DEMO_UNAVAILABLE);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [image, setImage] = useState<string | null>(null);
 
@@ -38,6 +39,7 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
         ? await imageFn({ data: { email, prompt: text } })
         : await textFn({ data: { email, categoria: categoria as "Escritura", messages: next } });
       if (!res.ok) {
+        setBlockedMsg(res.message);
         setBlocked(true);
         void trackEvent("demo_agotada", categoria);
       } else {
@@ -87,7 +89,7 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
 
       {blocked ? (
         <div className="mt-5 rounded-md border border-border bg-surface p-4 text-center">
-          <p className="text-sm">{DEMO_UNAVAILABLE}</p>
+          <p className="text-sm">{blockedMsg}</p>
           <Button className="mt-4 w-full" size="lg" onClick={onReserve}>Reservar mi cupo</Button>
         </div>
       ) : singleDone || chatDone ? (

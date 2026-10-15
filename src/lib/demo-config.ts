@@ -23,6 +23,7 @@ export const DEMO_DISCLAIMER =
 export const MAX_INPUT_CHARS = 500;
 export const MAX_CHAT_MESSAGES = 3;
 export const LIMITS = { textoPorCorreo: 2, imagenPorCorreo: 1, textoDiario: 300, imagenDiario: 30 };
+export const API_BUSY = "Por el momento se excedió el uso de la API de la demo. Reserva tu cupo y te avisamos apenas esté disponible.";
 export const DEMO_UNAVAILABLE = "La demo no está disponible en este momento, reserva tu cupo y te avisamos";
 
 const GUARD =

@@ -1,17 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { DEMO_UNAVAILABLE, LIMITS, MAX_CHAT_MESSAGES, MAX_INPUT_CHARS, TOOLS, type Cat } from "./demo-config";
+import { API_BUSY, DEMO_UNAVAILABLE, LIMITS, MAX_CHAT_MESSAGES, MAX_INPUT_CHARS, TOOLS, type Cat } from "./demo-config";
 
 type Result = { ok: true; text?: string; image?: string } | { ok: false; reason: "agotada" | "error"; message: string };
 
 const unavailable = (reason: "agotada" | "error"): Result => ({ ok: false, reason, message: DEMO_UNAVAILABLE });
+const apiBusy = (): Result => ({ ok: false, reason: "agotada", message: API_BUSY });
 
-async function checkQuota(email: string, kind: "text" | "image", categoria: string, record: boolean) {
+// Devuelve null si no hay cupo; si hay, una función que registra el uso (se llama solo si la demo salió bien).
+async function checkQuota(email: string, kind: "text" | "image", categoria: string, consume: boolean) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count: leads } = await supabaseAdmin.from("leads_test").select("id", { count: "exact", head: true }).ilike("email", email);
-  if (!leads) return false;
-  if (!record) return true;
+  if (!leads) return null;
+  if (!consume) return async () => {};
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const [{ count: mine }, { count: daily }] = await Promise.all([
     supabaseAdmin.from("demo_usage").select("id", { count: "exact", head: true }).eq("kind", kind).ilike("email", email),
@@ -19,9 +21,30 @@ async function checkQuota(email: string, kind: "text" | "image", categoria: stri
   ]);
   const perEmail = kind === "text" ? LIMITS.textoPorCorreo : LIMITS.imagenPorCorreo;
   const perDay = kind === "text" ? LIMITS.textoDiario : LIMITS.imagenDiario;
-  if ((mine ?? 0) >= perEmail || (daily ?? 0) >= perDay) return false;
-  const { error } = await supabaseAdmin.from("demo_usage").insert({ email, kind, categoria });
-  return !error;
+  if ((mine ?? 0) >= perEmail || (daily ?? 0) >= perDay) return null;
+  return async () => {
+    await supabaseAdmin.from("demo_usage").insert({ email, kind, categoria });
+  };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Llama a Gemini probando varios modelos y reintentando si hay alta demanda (503/429/500).
+async function callGemini(models: string[], key: string, body: unknown): Promise<Response | null> {
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) return res;
+      console.error("Gemini error", model, res.status, await res.text());
+      if (![429, 500, 503].includes(res.status)) break;
+      await sleep(800);
+    }
+  }
+  return null;
 }
 
 const textInput = z.object({
@@ -48,27 +71,19 @@ export const runTextDemo = createServerFn({ method: "POST" })
     if (!key) return unavailable("error");
     try {
       // A chat session counts as one use; only its first message consumes quota.
-      const ok = await checkQuota(data.email, "text", data.categoria, users.length === 1);
-      if (!ok) return unavailable("agotada");
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${tool.modelo}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: tool.promptSistema }] },
-            contents: messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
-            generationConfig: { maxOutputTokens: 400 },
-          }),
-        },
-      );
-      if (!res.ok) {
-        console.error("Gemini error", res.status, await res.text());
-        return unavailable("error");
-      }
+      const commit = await checkQuota(data.email, "text", data.categoria, users.length === 1);
+      if (!commit) return unavailable("agotada");
+      const res = await callGemini([tool.modelo!, "gemini-flash-lite-latest"], key, {
+        systemInstruction: { parts: [{ text: tool.promptSistema }] },
+        contents: messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
+        generationConfig: { maxOutputTokens: 400 },
+      });
+      if (!res) return apiBusy();
       const json = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
       const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim();
-      return text ? { ok: true, text } : unavailable("error");
+      if (!text) return unavailable("error");
+      await commit();
+      return { ok: true, text };
     } catch (e) {
       console.error("Text demo failed", e);
       return unavailable("error");
@@ -85,8 +100,8 @@ export const runImageDemo = createServerFn({ method: "POST" })
     const tool = TOOLS.Imagen;
     const model = process.env["GEMINI_IMAGE_MODEL"] || tool.modelo;
     try {
-      const ok = await checkQuota(data.email, "image", "Imagen", true);
-      if (!ok) return unavailable("agotada");
+      const commit = await checkQuota(data.email, "image", "Imagen", true);
+      if (!commit) return unavailable("agotada");
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
@@ -98,7 +113,7 @@ export const runImageDemo = createServerFn({ method: "POST" })
       if (!res.ok) {
         // 429 / limit 0 = el plan gratuito no incluye generación de imágenes.
         console.error("Gemini image error", res.status, await res.text());
-        return unavailable(res.status === 402 || res.status === 429 ? "agotada" : "error");
+        return res.status === 402 || res.status === 429 || res.status === 503 ? apiBusy() : unavailable("error");
       }
       const json = (await res.json()) as {
         candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[];
@@ -106,7 +121,9 @@ export const runImageDemo = createServerFn({ method: "POST" })
       const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
       const b64 = part?.inlineData?.data;
       const mime = part?.inlineData?.mimeType || "image/png";
-      return b64 ? { ok: true, image: `data:${mime};base64,${b64}` } : unavailable("error");
+      if (!b64) return unavailable("error");
+      await commit();
+      return { ok: true, image: `data:${mime};base64,${b64}` };
     } catch (e) {
       console.error("Image demo failed", e);
       return unavailable("error");
