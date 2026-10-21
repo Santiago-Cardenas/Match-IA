@@ -1,17 +1,29 @@
 import { useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Info, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Info, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { DEMO_DISCLAIMER, DEMO_UNAVAILABLE, MAX_CHAT_MESSAGES, MAX_INPUT_CHARS, SHOW_DEMO_DISCLAIMER, TOOLS, type Cat } from "@/lib/demo-config";
+import { DEMO_DISCLAIMER, DEMO_UNAVAILABLE, MAX_DEMO_PROMPTS, MAX_INPUT_CHARS, SHOW_DEMO_DISCLAIMER, TOOLS, type Cat } from "@/lib/demo-config";
 import { runImageDemo, runTextDemo } from "@/lib/demo.functions";
 import { trackEvent } from "@/lib/tracking";
 
-type Msg = { role: "user" | "model"; text: string };
+export type Msg = { role: "user" | "model"; text: string };
+export type DemoEstado = "en_curso" | "completa" | "terminada" | "agotada" | "sin_demo";
+export type DemoProgress = { estado: DemoEstado; prompts: number; conversacion: Msg[] };
 
-export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; email: string; onReserve: () => void }) {
+export function DemoPanel({
+  categoria,
+  email,
+  onProgress,
+  onFinish,
+}: {
+  categoria: Cat;
+  email: string;
+  onProgress: (p: DemoProgress) => void;
+  onFinish: (p: DemoProgress) => void;
+}) {
   const tool = TOOLS[categoria];
   const textFn = useServerFn(runTextDemo);
   const imageFn = useServerFn(runImageDemo);
@@ -22,14 +34,20 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
   const [messages, setMessages] = useState<Msg[]>([]);
   const [image, setImage] = useState<string | null>(null);
 
+  const maxPrompts = tool.demo === "imagen" ? 1 : MAX_DEMO_PROMPTS;
   const userCount = messages.filter((m) => m.role === "user").length;
-  const singleDone = tool.demo !== "chat" && (messages.length > 1 || image);
-  const chatDone = tool.demo === "chat" && userCount >= MAX_CHAT_MESSAGES;
+  const done = image !== null || (userCount >= maxPrompts && !loading && messages.at(-1)?.role === "model");
+
+  function finish() {
+    const estado: DemoEstado = blocked ? "agotada" : done ? "completa" : "terminada";
+    void trackEvent("demo_terminada", categoria);
+    onFinish({ estado, prompts: userCount, conversacion: messages });
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault();
     const text = input.trim().slice(0, MAX_INPUT_CHARS);
-    if (!text || loading) return;
+    if (!text || loading || userCount >= maxPrompts) return;
     setLoading(true);
     const next: Msg[] = [...messages, { role: "user", text }];
     setMessages(next);
@@ -41,14 +59,18 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
       if (!res.ok) {
         setBlockedMsg(res.message);
         setBlocked(true);
+        onProgress({ estado: "agotada", prompts: userCount + 1, conversacion: next });
         void trackEvent("demo_agotada", categoria);
       } else {
         if (res.image) setImage(res.image);
-        if (res.text) setMessages([...next, { role: "model", text: res.text }]);
+        const withReply: Msg[] = [...next, { role: "model", text: res.text ?? "[imagen generada]" }];
+        if (res.text) setMessages(withReply);
+        onProgress({ estado: "en_curso", prompts: userCount + 1, conversacion: withReply });
         void trackEvent("demo_usada", categoria);
       }
     } catch {
       setBlocked(true);
+      onProgress({ estado: "agotada", prompts: userCount + 1, conversacion: next });
       void trackEvent("demo_agotada", categoria);
     } finally {
       setLoading(false);
@@ -61,8 +83,10 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
         <CheckCircle2 className="mx-auto size-12 text-success" aria-hidden />
         <DialogTitle className="mt-5 text-2xl font-bold">{tool.nombre}</DialogTitle>
         <DialogDescription className="mt-2 text-base text-muted-foreground">{tool.descripcion}. {tool.porQue}</DialogDescription>
-        <p className="mt-4 text-sm text-foreground/85">Aún no tenemos demo de video. Reserva tu cupo y te avisamos apenas puedas probarla.</p>
-        <Button className="mt-6 w-full" size="lg" onClick={onReserve}>Reservar mi cupo</Button>
+        <p className="mt-4 text-sm text-foreground/85">Aún no tenemos demo de video, pero puedes probarla con MatchIA.</p>
+        <Button className="mt-6 w-full" size="lg" onClick={() => onFinish({ estado: "sin_demo", prompts: 0, conversacion: [] })}>
+          Continuar <ArrowRight aria-hidden />
+        </Button>
       </div>
     );
   }
@@ -70,7 +94,9 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
   return (
     <div>
       <DialogTitle className="text-2xl font-bold">Prueba {tool.nombre}</DialogTitle>
-      <DialogDescription className="mt-1 text-sm text-muted-foreground">{tool.descripcion}</DialogDescription>
+      <DialogDescription className="mt-1 text-sm text-muted-foreground">
+        {tool.descripcion} · {maxPrompts === 1 ? "1 prompt" : `hasta ${maxPrompts} prompts`}
+      </DialogDescription>
       {SHOW_DEMO_DISCLAIMER && (
         <p className="mt-4 flex items-start gap-2 rounded-md border border-primary/40 bg-primary/10 p-3 text-xs font-semibold text-foreground">
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden /> {DEMO_DISCLAIMER}
@@ -90,21 +116,24 @@ export function DemoPanel({ categoria, email, onReserve }: { categoria: Cat; ema
       {blocked ? (
         <div className="mt-5 rounded-md border border-border bg-surface p-4 text-center">
           <p className="text-sm">{blockedMsg}</p>
-          <Button className="mt-4 w-full" size="lg" onClick={onReserve}>Reservar mi cupo</Button>
+          <Button className="mt-4 w-full" size="lg" onClick={finish}>Continuar <ArrowRight aria-hidden /></Button>
         </div>
-      ) : singleDone || chatDone ? (
+      ) : done ? (
         <div className="mt-5 text-center">
-          <p className="text-sm text-muted-foreground">Llegaste al límite de esta prueba. Ya tienes tu cupo reservado.</p>
-          <Button className="mt-4 w-full" size="lg" variant="outline" onClick={onReserve}>Ver cómo registrarme</Button>
+          <p className="text-sm text-muted-foreground">Llegaste al límite de esta prueba.</p>
+          <Button className="mt-4 w-full" size="lg" onClick={finish}>Continuar <ArrowRight aria-hidden /></Button>
         </div>
       ) : (
         <form onSubmit={send} className="mt-5 grid gap-3">
           <Textarea value={input} onChange={(e) => setInput(e.target.value.slice(0, MAX_INPUT_CHARS))} placeholder={tool.placeholder} rows={3} maxLength={MAX_INPUT_CHARS} disabled={loading} />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{input.length}/{MAX_INPUT_CHARS}</span>
-            {tool.demo === "chat" && <span>{MAX_CHAT_MESSAGES - userCount} mensajes restantes</span>}
+            <span>{maxPrompts - userCount} {maxPrompts - userCount === 1 ? "prompt restante" : "prompts restantes"}</span>
           </div>
           <Button type="submit" size="lg" disabled={loading || !input.trim()}>{tool.demo === "imagen" ? "Generar imagen" : "Enviar"}</Button>
+          {userCount > 0 && !loading && (
+            <Button type="button" variant="ghost" size="sm" onClick={finish}>Terminar la prueba</Button>
+          )}
         </form>
       )}
     </div>

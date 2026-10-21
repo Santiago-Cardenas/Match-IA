@@ -94,11 +94,25 @@ function Landing() {
 
   useEffect(() => {
     captureUtm();
+    // Una visita por sesión del navegador (denominador de "visitantes únicos").
+    try {
+      if (!window.sessionStorage.getItem("matchia_visita")) {
+        window.sessionStorage.setItem("matchia_visita", "1");
+        void trackEvent("visita_landing");
+      }
+    } catch {
+      /* sessionStorage unavailable */
+    }
   }, []);
 
   function registerInterest(eventName: string, selectedPack?: PackId) {
     if (selectedPack) setPack(selectedPack);
     void trackEvent(eventName, selectedPack);
+  }
+
+  function openTest(eventName: string) {
+    void trackEvent(eventName);
+    setTestOpen(true);
   }
 
   return (
@@ -116,8 +130,8 @@ function Landing() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-background/95 via-background/85 to-background/35 sm:from-background/95 sm:via-background/70 sm:to-background/20" />
         <header className="section-shell flex items-center justify-between gap-4 py-6">
           <a href="#inicio" className="font-display text-2xl font-bold text-foreground" aria-label="MatchIA, inicio">Match<span className="text-primary">IA</span><span className="text-primary">.</span></a>
-          <Button variant="outline" size="sm" asChild>
-            <a href="#registro" onClick={() => registerInterest("cta_header_registro")}>Regístrate <ArrowRight aria-hidden /></a>
+          <Button variant="outline" size="sm" onClick={() => openTest("cta_header_test")}>
+            Haz el test <ArrowRight aria-hidden />
           </Button>
         </header>
         <div id="inicio" className="section-shell flex flex-1 flex-col justify-center pb-12 pt-10 sm:pb-16">
@@ -129,10 +143,10 @@ function Landing() {
             Hay decenas de herramientas de IA para cada tarea. Todas prometen ser la mejor. Pruébalas tú mismo antes de decidir cuál pagar.
           </p>
           <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <Button size="lg" className="min-h-12 w-full whitespace-normal px-6 text-center shadow-glow sm:w-auto" asChild>
-              <a href="#registro" onClick={() => registerInterest("cta_hero_registro")}>Regístrate sin compromiso <ArrowRight aria-hidden /></a>
+            <Button size="lg" className="min-h-12 w-full whitespace-normal px-6 text-center shadow-glow sm:w-auto" onClick={() => openTest("cta_hero_test")}>
+              Descubre tu IA ideal en 1 minuto <ArrowRight aria-hidden />
             </Button>
-            <span className="text-sm text-foreground/75">Sin costo. Te avisamos cuando estemos activos.</span>
+            <span className="text-sm text-foreground/75">Sin costo y sin registro previo.</span>
           </div>
         </div>
         <a href="#contexto" className="section-shell mb-5 flex items-center gap-2 text-xs font-semibold uppercase text-foreground/70" aria-label="Ver contexto de MatchIA">Explora la idea <ArrowDownRight className="size-4" aria-hidden /></a>
@@ -142,8 +156,8 @@ function Landing() {
         <div className="section-shell flex flex-col items-start gap-5 sm:items-center sm:text-center">
           <span className="eyebrow text-primary"><Sparkles className="size-3.5" aria-hidden /> Test de 1 minuto</span>
           <h2 className="max-w-2xl text-3xl font-bold sm:text-4xl">¿Estoy pagando por algo que no aprovecho?</h2>
-          <p className="max-w-lg text-base text-muted-foreground">Responde 6 preguntas rápidas y descubre tu perfil. Sin costo y sin compromiso.</p>
-          <Button size="lg" className="min-h-12 w-full whitespace-normal px-6 shadow-glow sm:w-auto" onClick={() => { void trackEvent("cta_iniciar_test"); setTestOpen(true); }}>
+          <p className="max-w-lg text-base text-muted-foreground">Calcula cuánto has gastado en IAs que no usas, descubre tu perfil y prueba la IA que mejor te encaja. Sin costo y sin compromiso.</p>
+          <Button size="lg" className="min-h-12 w-full whitespace-normal px-6 shadow-glow sm:w-auto" onClick={() => openTest("cta_iniciar_test")}>
             Descubre qué tipo de IA te conviene <ArrowRight aria-hidden />
           </Button>
         </div>

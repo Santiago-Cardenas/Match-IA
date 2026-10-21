@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { API_BUSY, DEMO_UNAVAILABLE, LIMITS, MAX_CHAT_MESSAGES, MAX_INPUT_CHARS, TOOLS, type Cat } from "./demo-config";
+import { API_BUSY, DEMO_UNAVAILABLE, LIMITS, MAX_DEMO_PROMPTS, MAX_INPUT_CHARS, TOOLS, type Cat } from "./demo-config";
 
 type Result = { ok: true; text?: string; image?: string } | { ok: false; reason: "agotada" | "error"; message: string };
 
@@ -9,11 +9,11 @@ const unavailable = (reason: "agotada" | "error"): Result => ({ ok: false, reaso
 const apiBusy = (): Result => ({ ok: false, reason: "agotada", message: API_BUSY });
 
 // Devuelve null si no hay cupo; si hay, una función que registra el uso (se llama solo si la demo salió bien).
-async function checkQuota(email: string, kind: "text" | "image", categoria: string, consume: boolean) {
+// Cada prompt cuenta como un uso.
+async function checkQuota(email: string, kind: "text" | "image", categoria: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count: leads } = await supabaseAdmin.from("leads_test").select("id", { count: "exact", head: true }).ilike("email", email);
   if (!leads) return null;
-  if (!consume) return async () => {};
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const [{ count: mine }, { count: daily }] = await Promise.all([
     supabaseAdmin.from("demo_usage").select("id", { count: "exact", head: true }).eq("kind", kind).ilike("email", email),
@@ -53,7 +53,7 @@ const textInput = z.object({
   messages: z
     .array(z.object({ role: z.enum(["user", "model"]), text: z.string().trim().min(1).max(MAX_INPUT_CHARS * 2) }))
     .min(1)
-    .max(MAX_CHAT_MESSAGES * 2),
+    .max(MAX_DEMO_PROMPTS * 2),
 });
 
 export const runTextDemo = createServerFn({ method: "POST" })
@@ -63,15 +63,13 @@ export const runTextDemo = createServerFn({ method: "POST" })
     const users = data.messages.filter((m) => m.role === "user");
     const last = data.messages[data.messages.length - 1]!;
     if (last.role !== "user" || last.text.length > MAX_INPUT_CHARS) return unavailable("error");
-    const maxUser = tool.demo === "chat" ? MAX_CHAT_MESSAGES : 1;
-    if (users.length > maxUser) return unavailable("agotada");
-    const messages = tool.demo === "chat" ? data.messages : [last];
+    if (users.length > MAX_DEMO_PROMPTS) return unavailable("agotada");
+    const messages = data.messages;
 
     const key = process.env["GEMINI_API_KEY"];
     if (!key) return unavailable("error");
     try {
-      // A chat session counts as one use; only its first message consumes quota.
-      const commit = await checkQuota(data.email, "text", data.categoria, users.length === 1);
+      const commit = await checkQuota(data.email, "text", data.categoria);
       if (!commit) return unavailable("agotada");
       const res = await callGemini([tool.modelo!, "gemini-flash-lite-latest"], key, {
         systemInstruction: { parts: [{ text: tool.promptSistema }] },
@@ -100,7 +98,7 @@ export const runImageDemo = createServerFn({ method: "POST" })
     const tool = TOOLS.Imagen;
     const model = process.env["GEMINI_IMAGE_MODEL"] || tool.modelo;
     try {
-      const commit = await checkQuota(data.email, "image", "Imagen", true);
+      const commit = await checkQuota(data.email, "image", "Imagen");
       if (!commit) return unavailable("agotada");
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST",
