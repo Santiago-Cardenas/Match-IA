@@ -273,7 +273,7 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
 
   function choosePack(id: PackId) {
     setPack(id);
-    void trackEvent(`pack_comprar_${id.toLowerCase()}`, id);
+    void trackEvent(`pack_interes_${id.toLowerCase()}`, id);
     go("fin", { pack_elegido: id, completado: true });
   }
 
@@ -322,7 +322,6 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       {on && <Check className="size-3.5" aria-hidden />}
                     </span>
                     <span className="flex-1 font-medium">{a.nombre}</span>
-                    <span className="text-muted-foreground">{formatUsd(a.usd)}/mes</span>
                   </button>
                 );
               })}
@@ -338,9 +337,6 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 Ninguna, no he pagado por IAs que no use
               </button>
             </div>
-            {ias.length > 0 && (
-              <p className="mt-4 text-sm text-muted-foreground">Suman <strong className="text-foreground">{formatUsd(mensual)} USD al mes</strong></p>
-            )}
             <Button size="lg" className="mt-5 w-full" disabled={!ninguna && ias.length === 0} onClick={confirmIas}>
               Continuar <ArrowRight aria-hidden />
             </Button>
@@ -453,7 +449,7 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
           <div>
             <DialogTitle className="text-2xl font-bold leading-tight">¿Quieres comparar varias IAs así, en tus propias tareas?</DialogTitle>
             <DialogDescription className="mt-2 text-sm text-muted-foreground">
-              Esto fue una sola herramienta con pocos prompts. Con un pack de prueba usas varias, sin suscripciones mensuales, y decides con tu propia experiencia.
+              Esto fue una sola herramienta con pocos prompts. Con un pack de prueba usarías varias, sin suscripciones mensuales, y decidirías con tu propia experiencia. Aún no lo cobramos: solo queremos saber si te interesaría.
             </DialogDescription>
             <div className="mt-6 grid gap-4">
               {PACKS.map((p) => (
@@ -483,7 +479,7 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
               <>
                 <DialogTitle className="mt-5 text-2xl font-bold">¡Gracias por tu interés en el Pack {pack}!</DialogTitle>
                 <DialogDescription className="mt-3 text-base text-foreground/85">
-                  MatchIA está en fase de validación y todavía no estamos cobrando: no se hizo ningún cargo. Te reservamos el precio de lanzamiento y te escribiremos a <strong>{email}</strong> apenas abramos.
+                  Registramos tu interés. MatchIA está en fase de validación y todavía no cobramos nada, así que no se hizo ningún cargo. Te escribiremos a <strong>{email}</strong> apenas abramos.
                 </DialogDescription>
               </>
             ) : (

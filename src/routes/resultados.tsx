@@ -103,7 +103,7 @@ function Resultados() {
     ["Dejaron sus datos", datos.length],
     ["Usaron la demo (≥1 prompt)", demo.length],
     ["Vieron los packs", vieronPacks.length],
-    ["Clic en comprar un pack", compra.length],
+    ["Clic en “Me interesa” un pack", compra.length],
   ];
 
   return (
@@ -130,8 +130,8 @@ function Resultados() {
 
         <h2 className="mt-10 text-lg font-semibold">Deseabilidad 3 · Packs de prueba</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Clic en comprar pack / visitantes" value={`${pct(compra.length, base)}%`} sub={`${compra.length} de ${base} ${visitas ? "visitas" : "sesiones"}`} meta={10} actual={pct(compra.length, base)} />
-          <Stat label="Clic en comprar pack / vieron packs" value={`${pct(compra.length, vieronPacks.length)}%`} sub={`${compra.length} de ${vieronPacks.length}`} />
+          <Stat label="Interés en pack / visitantes" value={`${pct(compra.length, base)}%`} sub={`${compra.length} de ${base} ${visitas ? "visitas" : "sesiones"}`} meta={10} actual={pct(compra.length, base)} />
+          <Stat label="Interés en pack / vieron packs" value={`${pct(compra.length, vieronPacks.length)}%`} sub={`${compra.length} de ${vieronPacks.length}`} />
           <Stat label="Pack Explorador" value={String(compra.filter((r) => r.pack_elegido === "Explorador").length)} sub="clics" />
           <Stat label="Pack Comparador" value={String(compra.filter((r) => r.pack_elegido === "Comparador").length)} sub="clics" />
         </div>

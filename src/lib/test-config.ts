@@ -4,19 +4,17 @@
 /** Tasa aproximada para mostrar el gasto en pesos. */
 export const USD_TO_COP = 4000;
 
-/** Deseabilidad 2: IAs de pago que el usuario puede marcar como desperdiciadas (precio mensual en USD). */
+/**
+ * Deseabilidad 2: IAs de pago que el usuario puede marcar como desperdiciadas.
+ * El precio mensual (USD) NO se muestra al usuario; solo se usa para calcular el gasto.
+ */
 export const PAID_AIS = [
-  { nombre: "ChatGPT Plus", usd: 20 },
-  { nombre: "Claude Pro", usd: 20 },
-  { nombre: "Gemini (Google AI Pro)", usd: 20 },
-  { nombre: "Perplexity Pro", usd: 20 },
+  { nombre: "ChatGPT", usd: 20 },
+  { nombre: "Claude", usd: 20 },
+  { nombre: "Gemini", usd: 20 },
   { nombre: "Jasper", usd: 40 },
   { nombre: "Midjourney", usd: 10 },
-  { nombre: "Canva Pro", usd: 15 },
-  { nombre: "GitHub Copilot", usd: 10 },
-  { nombre: "Synthesia", usd: 29 },
-  { nombre: "CapCut Pro", usd: 10 },
-  { nombre: "Otra IA de pago", usd: 20 },
+  { nombre: "Otra", usd: 20 },
 ];
 
 export const MONTH_OPTIONS = [
@@ -32,14 +30,14 @@ export const PACKS = [
     id: "Explorador",
     precio: "$9.90 USD",
     puntos: ["48 horas de acceso a 2 herramientas", "Entorno de pruebas seguro", "Ideal para tareas rápidas y directas"],
-    cta: "Probar Pack Explorador",
+    cta: "Me interesa el Pack Explorador",
     recomendado: false,
   },
   {
     id: "Comparador",
     precio: "$19.90 USD",
     puntos: ["Acceso a 5 modelos tope de gama", "Diagnóstico y tabla de resultados", "Pago sin auto-renovación"],
-    cta: "Comprar Pack Comparador",
+    cta: "Me interesa el Pack Comparador",
     recomendado: true,
   },
 ] as const;
