@@ -17,6 +17,35 @@ export const PAID_AIS = [
   { nombre: "Otra", usd: 20 },
 ];
 
+/** Deseabilidad 4: parámetros técnicos traducidos a necesidades del día a día, por categoría. */
+export const PARAMS: Record<string, { titulo: string; tecnico: string }[]> = {
+  Escritura: [
+    { titulo: "Contenido persuasivo sin hoja en blanco", tecnico: "Plantillas de copywriting" },
+    { titulo: "Mantiene tu estilo en cada texto", tecnico: "Voz de marca configurable" },
+    { titulo: "Respuestas en segundos", tecnico: "Baja latencia de generación" },
+  ],
+  Video: [
+    { titulo: "Videos sin cámara ni estudio", tecnico: "Avatares y voz sintética" },
+    { titulo: "Tus piezas en varios idiomas", tecnico: "Doblaje y subtítulos automáticos" },
+    { titulo: "Editar es tan fácil como escribir", tecnico: "Edición por texto (text-to-video)" },
+  ],
+  Imagen: [
+    { titulo: "Tus ideas convertidas en imágenes", tecnico: "Generación text-to-image" },
+    { titulo: "Estilos visuales a tu gusto", tecnico: "Control de estilo y parámetros" },
+    { titulo: "Resultados listos para compartir", tecnico: "Alta resolución y upscaling" },
+  ],
+  Código: [
+    { titulo: "Código y explicaciones al instante", tecnico: "Generación y autocompletado de código" },
+    { titulo: "Entiende proyectos largos", tecnico: "Ventana de contexto extensa" },
+    { titulo: "Menos errores en lo que escribes", tecnico: "Benchmarks HumanEval" },
+  ],
+  Productividad: [
+    { titulo: "Responde sobre tus propios documentos", tecnico: "Entrenado con tu contenido (RAG)" },
+    { titulo: "Organiza tareas y procesos", tecnico: "Automatización de flujos" },
+    { titulo: "Respuestas ultrarrápidas", tecnico: "Baja latencia TTFT (time-to-first-token)" },
+  ],
+};
+
 export const MONTH_OPTIONS = [
   { label: "Menos de 1 mes", meses: 1 },
   { label: "1 a 2 meses", meses: 2 },

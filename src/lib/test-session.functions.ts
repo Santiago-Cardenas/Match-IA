@@ -5,7 +5,7 @@ const str = (max: number) => z.string().trim().max(max).nullable();
 
 const sessionInput = z.object({
   id: z.string().uuid(),
-  paso: z.enum(["gasto", "meses", "impacto", "preguntas", "resultado", "datos", "demo", "pack", "fin"]),
+  paso: z.enum(["gasto", "meses", "impacto", "preguntas", "resultado", "datos", "demo", "confianza", "pack", "fin"]),
   completado: z.boolean(),
   ias_pagadas: z.array(z.string().max(60)).max(20),
   meses_sin_uso: z.number().int().min(0).max(120).nullable(),
@@ -23,6 +23,11 @@ const sessionInput = z.object({
   demo_estado: str(30),
   demo_prompts: z.number().int().min(0).max(20),
   demo_conversacion: z.array(z.object({ role: z.enum(["user", "model"]), text: z.string().max(4000) })).max(20),
+  clic_probar: z.boolean(),
+  confianza_antes: z.number().int().min(1).max(5).nullable(),
+  confianza_despues: z.number().int().min(1).max(5).nullable(),
+  prueba_decisiva: z.boolean().nullable(),
+  clic_suscribirme: z.boolean(),
   pack_elegido: str(30),
   motivo_sin_pack: str(100),
   utm_source: str(200),

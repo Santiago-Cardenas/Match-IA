@@ -119,6 +119,11 @@ export type Database = {
       }
       test_sessions: {
         Row: {
+          clic_probar: boolean
+          confianza_antes: number | null
+          confianza_despues: number | null
+          prueba_decisiva: boolean | null
+          clic_suscribirme: boolean
           categoria_ganadora: string | null
           clic_continuar: boolean
           completado: boolean
@@ -148,6 +153,11 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          clic_probar?: boolean
+          confianza_antes?: number | null
+          confianza_despues?: number | null
+          prueba_decisiva?: boolean | null
+          clic_suscribirme?: boolean
           categoria_ganadora?: string | null
           clic_continuar?: boolean
           completado?: boolean
@@ -177,6 +187,11 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          clic_probar?: boolean
+          confianza_antes?: number | null
+          confianza_despues?: number | null
+          prueba_decisiva?: boolean | null
+          clic_suscribirme?: boolean
           categoria_ganadora?: string | null
           clic_continuar?: boolean
           completado?: boolean
@@ -250,6 +265,11 @@ export type Database = {
     Views: {
       test_resultados: {
         Row: {
+          clic_probar: boolean | null
+          confianza_antes: number | null
+          confianza_despues: number | null
+          prueba_decisiva: boolean | null
+          clic_suscribirme: boolean | null
           id: string | null
           fecha: string | null
           paso: string | null

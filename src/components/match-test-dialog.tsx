@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { captureUtm, trackEvent } from "@/lib/tracking";
 import { TOOLS, type Cat } from "@/lib/demo-config";
-import { MONTH_OPTIONS, NO_PACK_REASONS, PACKS, PAID_AIS, USD_TO_COP, formatCop, formatUsd, type PackId } from "@/lib/test-config";
+import { MONTH_OPTIONS, NO_PACK_REASONS, PACKS, PAID_AIS, PARAMS, USD_TO_COP, formatCop, formatUsd, type PackId } from "@/lib/test-config";
 import { saveTestSession, type TestSession } from "@/lib/test-session.functions";
 import { DemoPanel, type DemoProgress } from "@/components/demo-panel";
 import { cn } from "@/lib/utils";
@@ -128,9 +128,27 @@ function emptySession(): Omit<TestSession, "id" | "utm_source" | "utm_medium" | 
     demo_estado: null,
     demo_prompts: 0,
     demo_conversacion: [],
+    clic_probar: false,
+    confianza_antes: null,
+    confianza_despues: null,
+    prueba_decisiva: null,
+    clic_suscribirme: false,
     pack_elegido: null,
     motivo_sin_pack: null,
   };
+}
+
+function Scale({ value, onChange }: { value: number | null; onChange: (n: number) => void }) {
+  return (
+    <div className="mt-2">
+      <div className="grid grid-cols-5 gap-2">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Button key={n} type="button" variant="outline" aria-pressed={value === n} className={cn("min-h-11", value === n && "border-primary bg-primary/15")} onClick={() => onChange(n)}>{n}</Button>
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground"><span>Nada seguro</span><span>Muy seguro</span></div>
+    </div>
+  );
 }
 
 export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -149,6 +167,9 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [confAntes, setConfAntes] = useState<number | null>(null);
+  const [confDespues, setConfDespues] = useState<number | null>(null);
+  const [decisiva, setDecisiva] = useState<boolean | null>(null);
   const [pack, setPack] = useState<PackId | null>(null);
   const [motivo, setMotivo] = useState<string | null>(null);
 
@@ -186,6 +207,7 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
       setTimeout(() => {
         setStage("gasto"); setIas([]); setNinguna(false); setMeses(null); setAnswers([]);
         setStatus("idle"); setError(null); setPack(null); setMotivo(null);
+        setConfAntes(null); setConfDespues(null); setDecisiva(null);
       }, 200);
     }
   }
@@ -268,7 +290,13 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
   }
 
   function onDemoFinish(p: DemoProgress) {
-    go("pack", { demo_estado: p.estado, demo_prompts: p.prompts, demo_conversacion: p.conversacion });
+    // Sin demo (video) no hay nada que comparar: se salta la medición de confianza.
+    go(p.estado === "sin_demo" ? "pack" : "confianza", { demo_estado: p.estado, demo_prompts: p.prompts, demo_conversacion: p.conversacion });
+  }
+
+  function finishConfianza(suscribirme: boolean) {
+    if (suscribirme) void trackEvent("elegir_ia_suscribirme", result?.winner);
+    go("pack", { confianza_despues: confDespues, prueba_decisiva: decisiva, clic_suscribirme: suscribirme });
   }
 
   function choosePack(id: PackId) {
@@ -418,8 +446,22 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
               <p className="mt-2 font-display text-2xl font-bold">{tool.nombre}</p>
               <p className="text-sm text-primary">{tool.descripcion}</p>
               <p className="mt-3 text-sm text-foreground/85">{tool.porQue}</p>
+              <ul className="mt-4 grid gap-2 text-left">
+                {PARAMS[result.winner]!.map((p) => (
+                  <li key={p.titulo} className="rounded-md border border-border bg-background px-3 py-2">
+                    <p className="text-sm font-semibold">{p.titulo}</p>
+                    <p className="text-xs text-muted-foreground">Traducción de: “{p.tecnico}”</p>
+                  </li>
+                ))}
+              </ul>
               {stage === "resultado" && (
-                <Button size="lg" className="mt-5 w-full" onClick={() => go("datos")}>Probar ahora <ArrowRight aria-hidden /></Button>
+                <>
+                  <p className="mt-5 text-sm font-medium">¿Qué tan seguro estás de que esta es la IA correcta para ti?</p>
+                  <Scale value={confAntes} onChange={setConfAntes} />
+                  <Button size="lg" className="mt-5 w-full" disabled={confAntes === null} onClick={() => { void trackEvent("clic_probar_ahora", result.winner); go("datos", { clic_probar: true, confianza_antes: confAntes }); }}>
+                    Probar ahora <ArrowRight aria-hidden />
+                  </Button>
+                </>
               )}
             </div>
             {stage === "datos" && (
@@ -443,6 +485,25 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
 
         {stage === "demo" && result && (
           <DemoPanel categoria={result.winner} email={email.trim()} onProgress={onDemoProgress} onFinish={onDemoFinish} />
+        )}
+
+        {stage === "confianza" && tool && (
+          <div>
+            <DialogTitle className="text-2xl font-bold leading-tight">Ahora que la probaste con tu propia tarea…</DialogTitle>
+            <DialogDescription className="sr-only">Cuéntanos cómo te fue con la prueba</DialogDescription>
+            <p className="mt-6 text-sm font-medium">¿Qué tan seguro estás ahora de que {tool.nombre} es la IA correcta para ti?</p>
+            <Scale value={confDespues} onChange={setConfDespues} />
+            <p className="mt-6 text-sm font-medium">¿Probarla con tu propio caso fue lo que más te ayudó a confiar?</p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              {([[true, "Sí"], [false, "No"]] as const).map(([v, l]) => (
+                <Button key={l} variant="outline" className={cn("min-h-11", decisiva === v && "border-primary bg-primary/15")} onClick={() => setDecisiva(v)}>{l}</Button>
+              ))}
+            </div>
+            <Button size="lg" className="mt-7 w-full whitespace-normal" disabled={confDespues === null || decisiva === null} onClick={() => finishConfianza(true)}>
+              Me interesa suscribirme a {tool.nombre} <ArrowRight aria-hidden />
+            </Button>
+            <Button variant="ghost" className="mt-2 w-full" disabled={confDespues === null || decisiva === null} onClick={() => finishConfianza(false)}>Continuar sin elegirla</Button>
+          </div>
         )}
 
         {stage === "pack" && (

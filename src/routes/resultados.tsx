@@ -91,6 +91,16 @@ function Resultados() {
   const vieronPacks = rows.filter((r) => r.paso === "pack" || r.paso === "fin");
   const compra = rows.filter((r) => r.pack_elegido === "Explorador" || r.pack_elegido === "Comparador");
   const base = visitas || abrieron;
+  // D4: diagnóstico
+  const empezaron = rows.filter((r) => r.clic_continuar);
+  const probar = rows.filter((r) => r.clic_probar);
+  // D1: test-drive
+  const conf = rows.filter((r) => r.confianza_antes != null && r.confianza_despues != null);
+  const subieron = conf.filter((r) => r.confianza_despues! - r.confianza_antes! >= 2);
+  const respondioDecisiva = rows.filter((r) => r.prueba_decisiva != null);
+  const decisiva = respondioDecisiva.filter((r) => r.prueba_decisiva);
+  const subieronYDecisiva = subieron.filter((r) => r.prueba_decisiva);
+  const suscribirme = rows.filter((r) => r.clic_suscribirme);
 
   const tally = (keys: (string | null | undefined)[]) =>
     Object.entries(keys.reduce<Record<string, number>>((m, k) => { if (k) m[k] = (m[k] ?? 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]);
@@ -100,8 +110,11 @@ function Resultados() {
     ["Usaron la calculadora de gasto", calculadora.length],
     ["Clic en “Encontremos tu IA ideal”", clic.length],
     ["Completaron las 6 preguntas", test.length],
+    ["Clic en “Probar ahora”", probar.length],
     ["Dejaron sus datos", datos.length],
     ["Usaron la demo (≥1 prompt)", demo.length],
+    ["Calificaron su confianza tras la demo", conf.length],
+    ["Clic en “Me interesa suscribirme”", suscribirme.length],
     ["Vieron los packs", vieronPacks.length],
     ["Clic en “Me interesa” un pack", compra.length],
   ];
@@ -120,6 +133,15 @@ function Resultados() {
           </div>
         </div>
 
+        <h2 className="mt-10 text-lg font-semibold">Deseabilidad 1 · Test-Drive (confiar probando)</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat label="Confianza subió ≥ 2 puntos" value={`${pct(subieron.length, conf.length)}%`} sub={`${subieron.length} de ${conf.length} con confianza antes y después`} meta={70} actual={pct(subieron.length, conf.length)} />
+          <Stat label="Dicen que probar su caso fue decisivo" value={`${pct(decisiva.length, respondioDecisiva.length)}%`} sub={`${decisiva.length} de ${respondioDecisiva.length} que respondieron`} />
+          <Stat label="Ambas condiciones (≥ 2 pts y decisivo)" value={`${pct(subieronYDecisiva.length, conf.length)}%`} sub={`${subieronYDecisiva.length} de ${conf.length}`} meta={70} actual={pct(subieronYDecisiva.length, conf.length)} />
+          <Stat label="Confianza promedio antes → después" value={`${avg(conf.map((r) => r.confianza_antes!)).toFixed(1)} → ${avg(conf.map((r) => r.confianza_despues!)).toFixed(1)}`} sub={`sobre 5 · ${conf.length} respuestas`} />
+          <Stat label="Clic en “Me interesa suscribirme”" value={`${pct(suscribirme.length, conf.length)}%`} sub={`${suscribirme.length} de ${conf.length} que probaron la demo`} />
+        </div>
+
         <h2 className="mt-10 text-lg font-semibold">Deseabilidad 2 · Gasto ineficiente en IA</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Reportan gasto en IAs sin usar" value={`${pct(conGasto.length, calculadora.length)}%`} sub={`${conGasto.length} de ${calculadora.length} que usaron la calculadora`} />
@@ -135,6 +157,14 @@ function Resultados() {
           <Stat label="Pack Explorador" value={String(compra.filter((r) => r.pack_elegido === "Explorador").length)} sub="clics" />
           <Stat label="Pack Comparador" value={String(compra.filter((r) => r.pack_elegido === "Comparador").length)} sub="clics" />
         </div>
+
+        <h2 className="mt-10 text-lg font-semibold">Deseabilidad 4 · Diagnóstico con lenguaje traducido</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat label="Terminan el diagnóstico sin abandonar" value={`${pct(test.length, empezaron.length)}%`} sub={`${test.length} de ${empezaron.length} que empezaron las preguntas`} meta={50} actual={pct(test.length, empezaron.length)} />
+          <Stat label="Clic en la recomendación final" value={`${pct(probar.length, empezaron.length)}%`} sub={`${probar.length} de ${empezaron.length} que empezaron las preguntas`} meta={15} actual={pct(probar.length, empezaron.length)} />
+          <Stat label="Clic / quienes vieron la recomendación" value={`${pct(probar.length, test.length)}%`} sub={`${probar.length} de ${test.length}`} />
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">En D4 la meta de finalización se tomó como “mayoría” (&gt; 50%). El botón es “Probar ahora”.</p>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-2">
           <section>
