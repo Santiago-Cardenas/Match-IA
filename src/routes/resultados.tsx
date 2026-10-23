@@ -81,8 +81,9 @@ function Resultados() {
 
   const { rows, visitas } = data;
   const abrieron = rows.length;
-  const calculadora = rows.filter((r) => r.paso !== "gasto");
-  const conGasto = rows.filter((r) => (r.gasto_usd ?? 0) > 0);
+  // Terminaron la calculadora = pasaron la pregunta de meses (antes el gasto solo tiene 1 mes).
+  const calculadora = rows.filter((r) => r.paso !== "gasto" && r.paso !== "meses");
+  const conGasto = rows.filter((r) => (r.gasto_usd ?? 0) > 0 && r.meses_sin_uso != null);
   const corto = conGasto.filter((r) => (r.meses_sin_uso ?? 99) <= 2);
   const clic = rows.filter((r) => r.clic_continuar);
   const test = rows.filter((r) => r.categoria_ganadora);
@@ -147,7 +148,7 @@ function Resultados() {
           <Stat label="Reportan gasto en IAs sin usar" value={`${pct(conGasto.length, calculadora.length)}%`} sub={`${conGasto.length} de ${calculadora.length} que usaron la calculadora`} />
           <Stat label="Gasto promedio reportado" value={`${formatUsd(Math.round(avg(conGasto.map((r) => r.gasto_usd ?? 0))))} USD`} sub={`≈ ${formatCop(avg(conGasto.map((r) => r.gasto_cop ?? 0)))} COP`} />
           <Stat label="Pagaron ≤ 2 meses sin aprovecharla" value={`${pct(corto.length, conGasto.length)}%`} sub={`${corto.length} de ${conGasto.length} con gasto`} meta={60} actual={pct(corto.length, conGasto.length)} />
-          <Stat label="Clic en “Encontremos tu IA ideal”" value={`${pct(clic.length, abrieron)}%`} sub={`${clic.length} de ${abrieron} sesiones`} meta={12} actual={pct(clic.length, abrieron)} />
+          <Stat label="Clic en “Encontremos tu IA ideal”" value={`${pct(clic.length, abrieron)}%`} sub={`${clic.length} de ${abrieron} sesiones · paso obligatorio del flujo`} meta={12} actual={pct(clic.length, abrieron)} />
         </div>
 
         <h2 className="mt-10 text-lg font-semibold">Deseabilidad 3 · Packs de prueba</h2>
@@ -161,7 +162,7 @@ function Resultados() {
         <h2 className="mt-10 text-lg font-semibold">Deseabilidad 4 · Diagnóstico con lenguaje traducido</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Terminan el diagnóstico sin abandonar" value={`${pct(test.length, empezaron.length)}%`} sub={`${test.length} de ${empezaron.length} que empezaron las preguntas`} meta={50} actual={pct(test.length, empezaron.length)} />
-          <Stat label="Clic en la recomendación final" value={`${pct(probar.length, empezaron.length)}%`} sub={`${probar.length} de ${empezaron.length} que empezaron las preguntas`} meta={15} actual={pct(probar.length, empezaron.length)} />
+          <Stat label="Clic en la recomendación final" value={`${pct(probar.length, empezaron.length)}%`} sub={`${probar.length} de ${empezaron.length} que empezaron las preguntas · paso obligatorio del flujo`} meta={15} actual={pct(probar.length, empezaron.length)} />
           <Stat label="Clic / quienes vieron la recomendación" value={`${pct(probar.length, test.length)}%`} sub={`${probar.length} de ${test.length}`} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">En D4 la meta de finalización se tomó como “mayoría” (&gt; 50%). El botón es “Probar ahora”.</p>
