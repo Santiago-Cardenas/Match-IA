@@ -12,13 +12,10 @@ function DisclosureContent() {
       <DialogDescription className="text-sm text-muted-foreground">Matchia está en fase de validación. Esto es lo que debes saber.</DialogDescription>
       <ul className="grid gap-3 text-sm leading-relaxed text-foreground">
         <li>
-          <strong>Las herramientas son simulaciones.</strong> Cuando usas una IA con su nombre (por ejemplo Jasper, Tabnine o Midjourney), no es la herramienta oficial ni tenemos relación con esas empresas: es una vista previa del tipo de resultado que podrías obtener.
+          <strong>Las herramientas IAs pueden generar errores.</strong> No garantizamos la precisión ni la integridad de los resultados obtenidos.
         </li>
         <li>
-          <strong>Qué IA responde de verdad.</strong> Los textos los genera <strong>Google Gemini</strong> y las imágenes <strong>Qwen-Image 2.1</strong> (modelo abierto de Alibaba). La calidad puede ser distinta a la de cada herramienta real.
-        </li>
-        <li>
-          <strong>Los pagos son simulados.</strong> No hay cobros ni pasarela de pago. Los datos de tarjeta que escribas no se envían, no se guardan y no se procesan: solo se acepta la tarjeta de prueba del proyecto.
+          <strong>Un unico pago por subscripción da acceso completo a tus IAs ideales.</strong> El acceso temporal a las IAs adicionales es gratuito por 3 prompts al día, después de eso, se requiere una subscripción mensual para seguir usando el prototipo.
         </li>
         <li>
           <strong>Tus datos.</strong> Guardamos tus chats y respuestas del test para mejorar el prototipo y no los compartimos con terceros. Tus mensajes se envían a esas IAs solo para generar la respuesta.
