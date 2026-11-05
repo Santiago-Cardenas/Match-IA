@@ -2,20 +2,21 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Loader2, Menu, SquarePen } from "lucide-react";
+import { Loader2, Lock, Menu, SquarePen } from "lucide-react";
 
 import { AiIcon } from "@/components/ai-icon";
 import { ChatSidebar, type ChatRow, type ProjectRow } from "@/components/chat/chat-sidebar";
 import { Composer, type ComposerHandle } from "@/components/chat/composer";
 import { MessageList } from "@/components/chat/message-list";
-import { ToolPicker } from "@/components/chat/tool-picker";
+import { ToolPicker, lockedStatus, type AccessInfo } from "@/components/chat/tool-picker";
+import { UnlockDialog } from "@/components/chat/unlock-dialog";
 import { Onboarding } from "@/components/onboarding";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { AIS, toAiId, type AiId } from "@/lib/ais";
 import { activarSuscripcion, crearProyecto, editAndResend, getAppInfo, sendChatMessage, type ChatMessage, type Suscripcion } from "@/lib/chat.functions";
-import { isPlan } from "@/lib/plans";
+import { PLANS, isPlan } from "@/lib/plans";
 import { useSession } from "@/lib/auth";
 import { trackEvent } from "@/lib/tracking";
 
@@ -40,6 +41,7 @@ function AppPage() {
   const activarFn = useServerFn(activarSuscripcion);
   const [sub, setSub] = useState<Suscripcion | null | undefined>(undefined); // undefined = cargando
   const [restantes, setRestantes] = useState<{ texto: number; imagen: number } | null>(null);
+  const [access, setAccess] = useState<AccessInfo>({ pruebas: {}, accesos: {}, tokens: 0 });
 
   // La app usa el tema oscuro de la marca; se aplica al <body> para que los diálogos también lo tomen.
   useEffect(() => {
@@ -53,13 +55,21 @@ function AppPage() {
 
   const token = useCallback(async () => (await supabase.auth.getSession()).data.session?.access_token ?? session?.access_token ?? "", [session]);
 
-  // Plan y uso del día. Si pagó al registrarse pero el plan no se activó (p. ej. confirmó el correo después), se activa aquí.
+  // Uso del día, pruebas restantes, accesos mensuales y tokens (se vuelve a pedir tras usar IAs fuera del plan o comprar).
+  const refresh = useCallback(async () => {
+    const res = await infoFn({ data: { token: await token() } });
+    if (!res.ok) return null;
+    setRestantes(res.restantes);
+    setAccess({ pruebas: res.pruebas, accesos: res.accesos, tokens: res.suscripcion?.tokens ?? 0 });
+    return res;
+  }, [infoFn, token]);
+
+  // Plan. Si pagó al registrarse pero el plan no se activó (p. ej. confirmó el correo después), se activa aquí.
   useEffect(() => {
     if (!session) return;
     void (async () => {
-      const res = await infoFn({ data: { token: await token() } });
-      if (!res.ok) return setSub(null);
-      setRestantes(res.restantes);
+      const res = await refresh();
+      if (!res) return setSub(null);
       const pagado = session.user.user_metadata?.["plan"];
       if (!res.suscripcion && isPlan(pagado)) {
         const a = await activarFn({ data: { token: await token(), plan: pagado } });
@@ -71,11 +81,19 @@ function AppPage() {
   }, [session?.user.id]);
 
   if (!session || sub === undefined) return <Loading />;
-  if (!sub || !sub.ias.length) return <Onboarding token={token} suscripcion={sub} onDone={setSub} />;
-  return <ChatApp session={session} sub={sub} token={token} restantesIniciales={restantes} />;
+  if (!sub || !sub.ias.length) return <Onboarding token={token} suscripcion={sub} onDone={(s) => { setSub(s); void refresh(); }} />;
+  return <ChatApp session={session} sub={sub} token={token} restantes={restantes} setRestantes={setRestantes} access={access} refresh={refresh} />;
 }
 
-function ChatApp({ session, sub, token, restantesIniciales }: { session: Session; sub: Suscripcion; token: () => Promise<string>; restantesIniciales: { texto: number; imagen: number } | null }) {
+function ChatApp({ session, sub, token, restantes, setRestantes, access, refresh }: {
+  session: Session;
+  sub: Suscripcion;
+  token: () => Promise<string>;
+  restantes: { texto: number; imagen: number } | null;
+  setRestantes: React.Dispatch<React.SetStateAction<{ texto: number; imagen: number } | null>>;
+  access: AccessInfo;
+  refresh: () => Promise<unknown>;
+}) {
   const { chat: chatId } = Route.useSearch();
   const navigate = useNavigate({ from: "/app" });
   const sendFn = useServerFn(sendChatMessage);
@@ -91,8 +109,8 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
   const [loadingChat, setLoadingChat] = useState(false);
   const [tool, setTool] = useState<AiId>(sub.ias[0]!);
   const [pending, setPending] = useState<{ herramienta: AiId } | null>(null);
-  const [restantes, setRestantes] = useState(restantesIniciales);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
   const [toDelete, setToDelete] = useState<{ kind: "chat" | "proyecto"; id: string; nombre: string } | null>(null);
 
   const user = session.user;
@@ -138,7 +156,7 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
       }
       setMessages((rows ?? []) as ChatMessage[]);
       const id = toAiId(chat.herramienta);
-      if (included(id)) setTool(id);
+      if (id) setTool(id);
       setLoadingChat(false);
     })();
     return () => {
@@ -172,9 +190,11 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
     void trackEvent("app_mensaje", herramienta);
     try {
       const res = await sendFn({ data: { token: await token(), chatId: origin ?? null, herramienta, texto: text } });
+      if (!included(herramienta)) void refresh(); // pruebas y tokens de IAs fuera del plan
       if (activeChat.current !== origin) return void loadLists(); // el usuario cambió de chat mientras esperaba
       if (!res.ok) {
-        setMessages((m) => [...m, localAviso(res.message)]);
+        setMessages((m) => [...m.filter((x) => !(res.bloqueada && x.id === temp.id)), localAviso(res.message)]);
+        if (res.bloqueada) setUnlockOpen(true);
         return;
       }
       setMessages((m) => [...m.filter((x) => x.id !== temp.id), res.user, res.reply]);
@@ -208,9 +228,11 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
     void trackEvent("app_mensaje_editado", herramienta);
     try {
       const res = await editFn({ data: { token: await token(), messageId, herramienta, texto: text } });
+      if (!included(herramienta)) void refresh();
       if (activeChat.current !== origin) return;
       if (!res.ok) {
         setMessages((m) => [...m, localAviso(res.message)]);
+        if (res.bloqueada) setUnlockOpen(true);
         return;
       }
       setMessages((m) => [...m.filter((x) => x.id !== messageId), res.user, res.reply]);
@@ -267,6 +289,32 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
 
   const empty = !chatId && messages.length === 0;
   const isImage = AIS[tool].tipo === "imagen";
+  const locked = !included(tool);
+  const status = locked ? lockedStatus(tool, access) : null;
+  const placeholder = status && !status.usable ? `Desbloquea ${AIS[tool].nombre} para seguir usándola` : AIS[tool].placeholder;
+  const composerLocked = !!status && !status.usable;
+
+  // Aviso sobre la barra de escritura cuando la IA no está en el plan.
+  const lockedBanner = status && (
+    <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm">
+      <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+        <Lock className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">
+          {AIS[tool].nombre} no está en tu plan ·{" "}
+          {access.accesos[tool]
+            ? `acceso mensual hasta el ${new Date(access.accesos[tool]!).toLocaleDateString("es-CO")}`
+            : (access.pruebas[tool] ?? 0) > 0
+              ? `te ${access.pruebas[tool] === 1 ? "queda 1 prueba" : `quedan ${access.pruebas[tool]} pruebas`} gratis hoy`
+              : access.tokens > 0
+                ? `usando tus tokens (${status.label})`
+                : `ya usaste ${PLANS[sub.plan].pruebasDiarias === 1 ? "tu prueba" : "tus pruebas"} de hoy`}
+        </span>
+      </span>
+      {!access.accesos[tool] && (
+        <Button size="sm" className="shrink-0" onClick={() => setUnlockOpen(true)}>Desbloquear</Button>
+      )}
+    </div>
+  );
   const low = restantes && (isImage ? restantes.imagen <= 3 : restantes.texto <= 5);
 
   const sidebar = (onClose?: () => void) => (
@@ -275,6 +323,7 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
       projects={projects}
       activeId={chatId}
       plan={sub.plan}
+      tokens={access.tokens}
       userName={userName}
       userEmail={user.email ?? ""}
       onSelect={(id) => openChat(id)}
@@ -305,7 +354,7 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
           <button type="button" onClick={() => setMenuOpen(true)} aria-label="Abrir menú" className="flex size-10 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden">
             <Menu className="size-5" aria-hidden />
           </button>
-          <ToolPicker value={tool} onChange={setTool} incluidas={sub.ias} plan={sub.plan} />
+          <ToolPicker value={tool} onChange={setTool} incluidas={sub.ias} plan={sub.plan} access={access} />
           <div className="flex-1" />
           <button type="button" onClick={() => openChat()} aria-label="Nuevo chat" className="flex size-10 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden">
             <SquarePen className="size-5" aria-hidden />
@@ -318,7 +367,8 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
               {firstName ? `${firstName}, ¿en qué trabajamos hoy?` : "¿En qué trabajamos hoy?"}
             </h1>
             <div className="mt-8 w-full max-w-3xl">
-              <Composer ref={composer} placeholder={AIS[tool].placeholder} disabled={!!pending} onSend={send} />
+              {lockedBanner}
+              <Composer ref={composer} placeholder={placeholder} disabled={!!pending || composerLocked} busy={!!pending} onSend={send} />
               <ul className="mx-auto mt-6 grid max-w-xl gap-1 px-1">
                 {sub.ias.map((id) => (
                   <li key={id}>
@@ -342,7 +392,8 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
             </div>
             {/* pb extra en pantallas angostas: deja libre la esquina del botón de información */}
             <div className="mx-auto w-full max-w-3xl px-3 pb-16 sm:px-6 xl:pb-4">
-              <Composer ref={composer} placeholder={AIS[tool].placeholder} disabled={!!pending || loadingChat} onSend={send} />
+              {lockedBanner}
+              <Composer ref={composer} placeholder={placeholder} disabled={!!pending || loadingChat || composerLocked} busy={!!pending} onSend={send} />
               {low && (
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   {isImage ? `Te quedan ${restantes!.imagen} imágenes hoy` : `Te quedan ${restantes!.texto} mensajes hoy`}
@@ -352,6 +403,8 @@ function ChatApp({ session, sub, token, restantesIniciales }: { session: Session
           </>
         )}
       </main>
+
+      {locked && <UnlockDialog ai={tool} open={unlockOpen} onOpenChange={setUnlockOpen} token={token} tokens={access.tokens} onBought={() => void refresh()} />}
 
       <Dialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <DialogContent className="max-w-sm rounded-xl">

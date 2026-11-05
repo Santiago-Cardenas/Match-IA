@@ -4,10 +4,10 @@
 import { AIS, identityRule, type Ai } from "./ais";
 
 export type Turn = { role: "user" | "model"; text: string };
-export type TextResult = { ok: true; text: string } | { ok: false; busy: boolean };
+export type TextResult = { ok: true; text: string; tokens: number } | { ok: false; busy: boolean };
 export type ImageResult =
-  | { ok: true; kind: "imagen"; bytes: Uint8Array; mime: string; prompt: string }
-  | { ok: true; kind: "texto"; text: string }
+  | { ok: true; kind: "imagen"; bytes: Uint8Array; mime: string; prompt: string; tokens: number }
+  | { ok: true; kind: "texto"; text: string; tokens: number }
   | { ok: false; busy: boolean; blocked?: boolean };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -43,9 +43,11 @@ export async function generateText(system: string, turns: Turn[], { model = "gem
     generationConfig: { maxOutputTokens, ...(json ? { responseMimeType: "application/json" } : {}) },
   });
   if (!res) return { ok: false, busy: true };
-  const body = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const body = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: { totalTokenCount?: number } };
   const text = body.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim();
-  return text ? { ok: true, text } : { ok: false, busy: false };
+  // Tokens reales de la llamada (si la API no los informa, se estiman ~4 caracteres por token).
+  const tokens = body.usageMetadata?.totalTokenCount ?? Math.ceil(((text?.length ?? 0) + JSON.stringify(turns).length) / 4);
+  return text ? { ok: true, text, tokens } : { ok: false, busy: false };
 }
 
 /**
@@ -65,16 +67,16 @@ Responde SOLO con JSON, en una de estas formas:
 - "bloquear": contenido sexual o desnudos, violencia gráfica, odio, actividades ilegales, menores en contextos inapropiados o imitar a una persona real de forma engañosa.`;
 }
 
-type FilterDecision = { accion: "imagen"; prompt: string } | { accion: "responder"; texto: string } | { accion: "bloquear" };
+type FilterDecision = ({ accion: "imagen"; prompt: string } | { accion: "responder"; texto: string } | { accion: "bloquear" }) & { tokens: number };
 
 async function imageFilter(turns: Turn[], tool: Ai): Promise<FilterDecision | "busy"> {
   const r = await generateText(imageFilterPrompt(tool), turns, { maxOutputTokens: 500, json: true });
   if (!r.ok) return "busy"; // sin filtro no se genera nada (el modelo de imagen no trae filtro propio)
   try {
     const d = JSON.parse(r.text.replace(/^```(?:json)?|```$/g, "").trim()) as Partial<{ accion: string; prompt: string; texto: string }>;
-    if (d.accion === "imagen" && d.prompt?.trim()) return { accion: "imagen", prompt: d.prompt.trim() };
-    if (d.accion === "responder" && d.texto?.trim()) return { accion: "responder", texto: d.texto.trim() };
-    if (d.accion === "bloquear") return { accion: "bloquear" };
+    if (d.accion === "imagen" && d.prompt?.trim()) return { accion: "imagen", prompt: d.prompt.trim(), tokens: r.tokens };
+    if (d.accion === "responder" && d.texto?.trim()) return { accion: "responder", texto: d.texto.trim(), tokens: r.tokens };
+    if (d.accion === "bloquear") return { accion: "bloquear", tokens: r.tokens };
   } catch {
     console.error("Filtro de imagen: respuesta no es JSON", r.text.slice(0, 200));
   }
@@ -98,11 +100,11 @@ export async function generateImage(message: string, history: Turn[] = [], tool:
   const decision = await imageFilter([...history, { role: "user", text: message }], tool);
   if (decision === "busy") return { ok: false, busy: true };
   if (decision.accion === "bloquear") return { ok: false, busy: false, blocked: true };
-  if (decision.accion === "responder") return { ok: true, kind: "texto", text: decision.texto };
+  if (decision.accion === "responder") return { ok: true, kind: "texto", text: decision.texto, tokens: decision.tokens };
   const provider = imageProvider();
   try {
     const img = provider === "local" ? await viaLocalQwen(decision.prompt) : provider === "modelscope" ? await viaModelScope(decision.prompt) : await viaGemini(decision.prompt);
-    return img.ok ? { ...img, kind: "imagen", prompt: decision.prompt } : img;
+    return img.ok ? { ...img, kind: "imagen", prompt: decision.prompt, tokens: decision.tokens } : img;
   } catch (e) {
     console.error("Image generation failed", provider, e);
     return { ok: false, busy: true };

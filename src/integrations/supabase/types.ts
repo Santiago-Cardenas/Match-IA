@@ -12,6 +12,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      accesos: {
+        Row: {
+          created_at: string
+          hasta: string
+          ia: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hasta: string
+          ia: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hasta?: string
+          ia?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chats: {
         Row: {
           project_id: string | null
@@ -38,6 +59,33 @@ export type Database = {
           id?: string
           titulo?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      compras: {
+        Row: {
+          created_at: string
+          detalle: string
+          id: string
+          precio_cop: number
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          detalle: string
+          id?: string
+          precio_cop: number
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          detalle?: string
+          id?: string
+          precio_cop?: number
+          tipo?: string
           user_id?: string
         }
         Relationships: []
@@ -149,6 +197,8 @@ export type Database = {
       }
       messages: {
         Row: {
+          tokens: number | null
+          acceso: string | null
           chat_id: string
           contenido: string
           created_at: string
@@ -160,6 +210,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          tokens?: number | null
+          acceso?: string | null
           chat_id: string
           contenido?: string
           created_at?: string
@@ -171,6 +223,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          tokens?: number | null
+          acceso?: string | null
           chat_id?: string
           contenido?: string
           created_at?: string
@@ -209,6 +263,7 @@ export type Database = {
       }
       suscripciones: {
         Row: {
+          tokens: number
           created_at: string
           ias: string[]
           plan: string
@@ -217,6 +272,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          tokens?: number
           created_at?: string
           ias?: string[]
           plan: string
@@ -225,6 +281,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          tokens?: number
           created_at?: string
           ias?: string[]
           plan?: string

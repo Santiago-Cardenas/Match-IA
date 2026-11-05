@@ -4,7 +4,7 @@ import { CreditCard, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CUOTAS, PLANS, type PlanId } from "@/lib/plans";
+import { CUOTAS } from "@/lib/plans";
 import { trackEvent } from "@/lib/tracking";
 
 // PAGO SIMULADO (prototipo de investigación): no hay pasarela.
@@ -16,7 +16,8 @@ const TEST_CVV = "1";
 const inputCls = "h-11 border-[#2A3A60] bg-[#14213D] text-white placeholder:text-[#A9AEC0]/60";
 const digits = (v: string) => v.replace(/\D/g, "");
 
-export function PaymentForm({ plan, submitLabel, onApproved, onBack }: { plan: PlanId; submitLabel: string; onApproved: () => void | Promise<void>; onBack?: () => void }) {
+/** concepto/precio = lo que se muestra; evento = detalle para la analítica (nunca datos de la tarjeta). */
+export function PaymentForm({ concepto, precio, evento, submitLabel, onApproved, onBack }: { concepto: string; precio: string; evento: string; submitLabel: string; onApproved: () => void | Promise<void>; onBack?: () => void }) {
   const [titular, setTitular] = useState("");
   const [numero, setNumero] = useState("");
   const [vence, setVence] = useState("");
@@ -41,11 +42,11 @@ export function PaymentForm({ plan, submitLabel, onApproved, onBack }: { plan: P
     setError(null);
     await new Promise((r) => setTimeout(r, 1800)); // simula la respuesta del banco
     if (digits(numero) === TEST_CARD && cvv === TEST_CVV) {
-      void trackEvent("pago_aprobado", plan);
+      void trackEvent("pago_aprobado", evento);
       await onApproved();
       return;
     }
-    void trackEvent("pago_rechazado", plan);
+    void trackEvent("pago_rechazado", evento);
     setError("Tu pago fue rechazado. El banco no autorizó la transacción. Verifica los datos o intenta con otra tarjeta.");
     setStatus("idle");
   }
@@ -53,8 +54,8 @@ export function PaymentForm({ plan, submitLabel, onApproved, onBack }: { plan: P
   return (
     <form onSubmit={submit} className="grid gap-4" autoComplete="off">
       <div className="flex items-center justify-between rounded-lg bg-[#14213D] px-4 py-3 text-sm">
-        <span className="text-[#A9AEC0]">Pack {plan} · pago único</span>
-        <span className="font-display text-base font-bold text-white">{PLANS[plan].precio}</span>
+        <span className="text-[#A9AEC0]">{concepto}</span>
+        <span className="font-display text-base font-bold text-white">{precio}</span>
       </div>
       <div className="grid gap-2">
         <Label htmlFor="p-titular">Nombre en la tarjeta</Label>

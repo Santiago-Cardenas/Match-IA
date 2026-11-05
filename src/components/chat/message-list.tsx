@@ -12,8 +12,8 @@ import type { ChatMessage } from "@/lib/chat.functions";
 function AiLabel({ herramienta }: { herramienta: string | null }) {
   const id = toAiId(herramienta);
   return (
-    <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-      {id && <AiIcon id={id} boxed={false} className="size-3.5" />} {id ? AIS[id].nombre : "Matchia"}
+    <p className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+      {id && <AiIcon id={id} boxed={false} className="size-5" />} {id ? AIS[id].nombre : "Matchia"}
     </p>
   );
 }

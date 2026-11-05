@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Check, ChevronRight, Folder, FolderMinus, FolderOpen, FolderPlus, Loader2, LogOut, Pencil, Search, SquarePen, Trash2, X } from "lucide-react";
 
+import { AiIcon } from "@/components/ai-icon";
 import { BrandLogo } from "@/components/brand-logo";
+import { toAiId } from "@/lib/ais";
+import { formatTokens } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 export type ChatRow = { id: string; titulo: string; herramienta: string; updated_at: string; project_id: string | null };
@@ -66,6 +69,7 @@ export function ChatSidebar(props: {
   projects: ProjectRow[];
   activeId: string | undefined;
   plan: string;
+  tokens: number;
   userName: string;
   userEmail: string;
   onSelect: (id: string) => void;
@@ -140,11 +144,12 @@ export function ChatSidebar(props: {
             onClick={() => props.onSelect(c.id)}
             aria-current={c.id === activeId ? "page" : undefined}
             className={cn(
-              "flex h-9 w-full cursor-pointer items-center rounded-lg px-3 pr-[5.5rem] text-left text-sm transition-colors",
+              "flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-3 pr-[5.5rem] text-left text-sm transition-colors",
               inProject && "pl-8",
               c.id === activeId ? "bg-secondary text-foreground" : "text-foreground/85 hover:bg-secondary/70",
             )}
           >
+            {toAiId(c.herramienta) && <AiIcon id={toAiId(c.herramienta)!} boxed={false} />}
             <span className="truncate">{c.titulo}</span>
           </button>
           <span className={cn("absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100", c.id === activeId && "opacity-100")}>
@@ -259,7 +264,10 @@ export function ChatSidebar(props: {
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary font-display text-sm font-bold text-primary-foreground" aria-hidden>{initials}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{props.userName || props.userEmail}</span>
-          <span className="mt-0.5 inline-block rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">Pack {props.plan}</span>
+          <span className="mt-0.5 flex flex-wrap gap-1">
+            <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">Pack {props.plan}</span>
+            {props.tokens > 0 && <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{formatTokens(props.tokens)} tokens</span>}
+          </span>
         </span>
         <button type="button" onClick={props.onLogout} aria-label="Cerrar sesión" title="Cerrar sesión" className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground">
           <LogOut className="size-4" aria-hidden />

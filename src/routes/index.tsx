@@ -276,7 +276,7 @@ function Landing() {
               <span className="text-sm font-semibold text-primary">Para enfocarte en una tarea</span>
               <h3 className="mt-4 text-3xl font-bold">Explorador</h3>
               <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Explorador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único</span></p>
-              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y accede a tus 2 IAs ideales, elegidas según cómo trabajas.</p>
+              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y accede a tus 3 IAs ideales, elegidas según cómo trabajas. Las demás las puedes probar gratis cada día.</p>
               <Button variant="secondary" size="lg" className="mt-8 min-h-12 w-full whitespace-normal" asChild>
                 <Link to="/entrar" search={{ modo: "registro", plan: "Explorador" }} onClick={() => void trackEvent("cta_pack_explorador", "Explorador")}>Elegir Explorador <ArrowRight aria-hidden /></Link>
               </Button>
@@ -285,7 +285,7 @@ function Landing() {
               <span className="text-sm font-semibold text-primary">Para explorar distintas tareas</span>
               <h3 className="mt-4 text-3xl font-bold">Comparador</h3>
               <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Comparador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único</span></p>
-              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y compara tus 4 IAs ideales, de propósitos distintos, en un solo lugar.</p>
+              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y compara tus 7 IAs ideales, de propósitos distintos, en un solo lugar, con más pruebas diarias de las demás.</p>
               <Button size="lg" className="mt-8 min-h-12 w-full whitespace-normal" asChild>
                 <Link to="/entrar" search={{ modo: "registro", plan: "Comparador" }} onClick={() => void trackEvent("cta_pack_comparador", "Comparador")}>Elegir Comparador <ArrowRight aria-hidden /></Link>
               </Button>

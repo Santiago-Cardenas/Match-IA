@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 export type ComposerHandle = { fill: (text: string) => void };
 
 /** Barra de escritura: una línea que crece con el texto. Enter envía, Shift+Enter hace salto de línea. */
-export const Composer = forwardRef<ComposerHandle, { placeholder: string; disabled: boolean; onSend: (text: string) => void; className?: string }>(
-  function Composer({ placeholder, disabled, onSend, className }, handle) {
+export const Composer = forwardRef<ComposerHandle, { placeholder: string; disabled: boolean; busy?: boolean; onSend: (text: string) => void; className?: string }>(
+  function Composer({ placeholder, disabled, busy = false, onSend, className }, handle) {
     const [text, setText] = useState("");
     const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -66,7 +66,7 @@ export const Composer = forwardRef<ComposerHandle, { placeholder: string; disabl
           aria-label="Enviar"
           className="mb-0.5 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-[#FF8466] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {disabled ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <ArrowUp className="size-5" aria-hidden />}
+          {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <ArrowUp className="size-5" aria-hidden />}
         </button>
       </form>
     );

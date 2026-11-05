@@ -23,7 +23,7 @@ Cada persona que abre el test genera una fila en `test_sessions`, que se actuali
 - `/entrar`: registro e inicio de sesión con correo y contraseña (Supabase Auth). Para el prototipo conviene desactivar
   *Authentication → Sign In / Providers → Email → Confirm email*, así la cuenta queda activa al instante.
 - `/app`: chats guardados en `chats` y `messages` (cada usuario ve solo los suyos). Límites diarios en `src/lib/app-config.ts`.
-- Planes (pago **simulado**): al registrarse se elige Explorador (top 2 IAs) o Comparador (top 4) y se "paga".
+- Planes (pago **simulado**): al registrarse se elige Explorador (top 3 IAs, 1 prueba diaria de las demás) o Comparador (top 7, 3 pruebas diarias) y se "paga". Las IAs fuera del plan se desbloquean con acceso mensual ($12.000 COP) o tokens (`src/lib/plans.ts`).
   Solo se aprueba la tarjeta de prueba **número `1` y CVV `1`** (cualquier vencimiento y cuotas); cualquier otra se rechaza.
   Los datos de tarjeta nunca salen del navegador. Luego un test corto de match (`src/lib/match-quiz.ts`) elige las IAs del plan.
 - IAs disponibles (nombres, propósitos y prompts): `src/lib/ais.ts`. Proyectos = carpetas de chats con nombre sugerido por IA.

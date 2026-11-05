@@ -1,5 +1,5 @@
 // Catálogo de IAs de nicho que ofrece Matchia. Cada una tiene un propósito distinto para que el match
-// (top 2 en Explorador, top 4 en Comparador) tenga sentido. Cambia aquí nombres, textos o prompts.
+// (top 3 en Explorador, top 7 en Comparador) tenga sentido. Cambia aquí nombres, textos o prompts.
 // Se simulan con Gemini (texto) y Qwen-Image 2.1 (imágenes); la aclaración está en el botón de información.
 
 export type AiId = "jasper" | "grammarly" | "tabnine" | "qodo" | "notion" | "elicit" | "julius" | "gamma" | "synthesia" | "midjourney" | "ideogram";

@@ -71,7 +71,7 @@ export function Onboarding({ token, suscripcion, onDone }: { token: () => Promis
               <Button size="lg" disabled={!plan} onClick={() => setPaso("pago")} className={cn("mt-5 w-full", primary)}>Continuar al pago</Button>
             </>
           ) : (
-            plan && <PaymentForm plan={plan} submitLabel="Pagar y activar" onApproved={activar} onBack={() => setPaso("plan")} />
+            plan && <PaymentForm concepto={`Pack ${plan} · pago único`} precio={PLANS[plan].precio} evento={plan} submitLabel="Pagar y activar" onApproved={activar} onBack={() => setPaso("plan")} />
           )}
         </div>
       </>

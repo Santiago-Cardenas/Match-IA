@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { authErrorMessage, useSession } from "@/lib/auth";
 import { activarSuscripcion } from "@/lib/chat.functions";
-import { isPlan, type PlanId } from "@/lib/plans";
+import { PLANS, isPlan, type PlanId } from "@/lib/plans";
 import { trackEvent } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
 
@@ -195,7 +195,7 @@ function Entrar() {
                 {paso === "pago" && plan && (
                   <>
                     <h1 className="mb-4 font-display text-xl font-bold">Pago</h1>
-                    <PaymentForm plan={plan} submitLabel="Pagar y crear mi cuenta" onApproved={crearCuenta} onBack={() => setPaso("cuenta")} />
+                    <PaymentForm concepto={`Pack ${plan} · pago único`} precio={PLANS[plan].precio} evento={plan} submitLabel="Pagar y crear mi cuenta" onApproved={crearCuenta} onBack={() => setPaso("cuenta")} />
                   </>
                 )}
               </div>
