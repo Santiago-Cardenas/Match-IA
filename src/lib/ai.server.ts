@@ -1,7 +1,7 @@
 // Generación de texto (Gemini) e imágenes (Qwen-Image 2.1) del lado del servidor.
 // Solo se importa dentro de handlers de server functions: await import("@/lib/ai.server").
 
-import { TOOLS, identityRule } from "./demo-config";
+import { AIS, identityRule, type Ai } from "./ais";
 
 export type Turn = { role: "user" | "model"; text: string };
 export type TextResult = { ok: true; text: string } | { ok: false; busy: boolean };
@@ -53,23 +53,22 @@ export async function generateText(system: string, turns: Turn[], { model = "gem
  * decide si el mensaje pide una imagen o es conversación, bloquea contenido no apto
  * y escribe el prompt final con el estilo propio de la herramienta, como si fuera esa IA.
  */
-function imageFilterPrompt() {
-  const tool = TOOLS.Imagen;
-  return `Eres el motor interno de ${tool.nombre} (${tool.descripcion}). Lee la conversación y decide qué hacer con el ÚLTIMO mensaje del usuario.
+function imageFilterPrompt(tool: Ai) {
+  return `Eres el motor interno de ${tool.nombre} (${tool.proposito}: ${tool.descripcion}). Lee la conversación y decide qué hacer con el ÚLTIMO mensaje del usuario.
 Responde SOLO con JSON, en una de estas formas:
 {"accion":"imagen","prompt":"..."}
 {"accion":"responder","texto":"..."}
 {"accion":"bloquear"}
 
-- "imagen": el usuario pide crear una imagen o cambiar la anterior. Escribe "prompt" en inglés, completo y autocontenido (sujeto, acción, entorno, composición, estilo, luz, colores, encuadre), de 40 a 120 palabras. Si pide cambios sobre la imagen anterior, reescribe el prompt anterior con esos cambios. Aplica el estilo característico de ${tool.nombre}: ${tool.promptSistema}. Si el usuario pide otro estilo, respeta el suyo. Si quiere texto dentro de la imagen, inclúyelo literal entre comillas.
+- "imagen": el usuario pide crear una imagen o cambiar la anterior. Escribe "prompt" en inglés, completo y autocontenido (sujeto, acción, entorno, composición, estilo, luz, colores, encuadre), de 40 a 120 palabras. Si pide cambios sobre la imagen anterior, reescribe el prompt anterior con esos cambios. Aplica el estilo característico de ${tool.nombre}: ${tool.prompt}. Si el usuario pide otro estilo, respeta el suyo. Si quiere texto dentro de la imagen, inclúyelo literal entre comillas.
 - "responder": es un saludo, una pregunta o conversación que no pide una imagen. Contesta en español, breve y cercano, como ${tool.nombre}, y sugiere una idea de imagen.${identityRule(tool.nombre)}
 - "bloquear": contenido sexual o desnudos, violencia gráfica, odio, actividades ilegales, menores en contextos inapropiados o imitar a una persona real de forma engañosa.`;
 }
 
 type FilterDecision = { accion: "imagen"; prompt: string } | { accion: "responder"; texto: string } | { accion: "bloquear" };
 
-async function imageFilter(turns: Turn[]): Promise<FilterDecision | "busy"> {
-  const r = await generateText(imageFilterPrompt(), turns, { maxOutputTokens: 500, json: true });
+async function imageFilter(turns: Turn[], tool: Ai): Promise<FilterDecision | "busy"> {
+  const r = await generateText(imageFilterPrompt(tool), turns, { maxOutputTokens: 500, json: true });
   if (!r.ok) return "busy"; // sin filtro no se genera nada (el modelo de imagen no trae filtro propio)
   try {
     const d = JSON.parse(r.text.replace(/^```(?:json)?|```$/g, "").trim()) as Partial<{ accion: string; prompt: string; texto: string }>;
@@ -95,8 +94,8 @@ export function imageProvider() {
  * Genera una imagen pasando primero por el filtro. `history` = turnos previos del chat (para "hazlo más azul").
  * Puede devolver texto si el mensaje no pedía una imagen.
  */
-export async function generateImage(message: string, history: Turn[] = []): Promise<ImageResult> {
-  const decision = await imageFilter([...history, { role: "user", text: message }]);
+export async function generateImage(message: string, history: Turn[] = [], tool: Ai = AIS.midjourney): Promise<ImageResult> {
+  const decision = await imageFilter([...history, { role: "user", text: message }], tool);
   if (decision === "busy") return { ok: false, busy: true };
   if (decision.accion === "bloquear") return { ok: false, busy: false, blocked: true };
   if (decision.accion === "responder") return { ok: true, kind: "texto", text: decision.texto };
@@ -114,7 +113,9 @@ type RawImage = { ok: true; bytes: Uint8Array; mime: string } | { ok: false; bus
 
 // Servidor propio (tools/qwen-image-server): POST /generate { prompt } -> { image: base64, mime }.
 async function viaLocalQwen(prompt: string): Promise<RawImage> {
-  const url = env("QWEN_IMAGE_URL").replace(/\/$/, "");
+  // Acepta la URL con o sin https:// y con o sin "/" al final.
+  const raw = env("QWEN_IMAGE_URL").trim().replace(/\/+$/, "");
+  const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   const res = await fetch(`${url}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${env("QWEN_IMAGE_TOKEN")}`, "ngrok-skip-browser-warning": "1" },

@@ -28,7 +28,7 @@ async function checkQuota(email: string, kind: "text" | "image", categoria: stri
 
 const textInput = z.object({
   email: z.string().trim().email().max(255),
-  categoria: z.enum(["Escritura", "Productividad", "Código"]),
+  categoria: z.enum(["Escritura", "Productividad", "Código", "Video"]),
   messages: z
     .array(z.object({ role: z.enum(["user", "model"]), text: z.string().trim().min(1).max(MAX_INPUT_CHARS * 2) }))
     .min(1)

@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
+import { AiShowcase } from "@/components/ai-showcase";
+import { AI_ORDER } from "@/lib/ais";
+import { PLANS } from "@/lib/plans";
 import { useSession } from "@/lib/auth";
 import { WaitlistForm, type PackId } from "@/components/waitlist-dialog";
 import { MatchTestDialog } from "@/components/match-test-dialog";
@@ -231,6 +234,16 @@ function Landing() {
         </div>
       </section>
 
+      {/* C2. IAs disponibles */}
+      <section id="ias" className="border-b border-border py-20 sm:py-24">
+        <div className="section-shell">
+          <span className="eyebrow">Las IAs de Matchia</span>
+          <h2 className="mt-5 max-w-2xl text-3xl font-bold sm:text-5xl">{AI_ORDER.length} IAs de nicho. Tu match decide cuáles usas.</h2>
+          <p className="mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">Cada una sirve para algo distinto: marketing, código, datos, investigación, diseño y más. Haces un test corto y te damos acceso a las que mejor encajan contigo.</p>
+        </div>
+        <div className="mt-10"><AiShowcase /></div>
+      </section>
+
       {/* D. Cómo funciona */}
       <section className="section-shell py-20 sm:py-28">
         <span className="eyebrow">03 / Cómo funciona</span>
@@ -262,21 +275,23 @@ function Landing() {
             <article className="flex flex-col rounded-md border border-border bg-background p-7 sm:p-9">
               <span className="text-sm font-semibold text-primary">Para enfocarte en una tarea</span>
               <h3 className="mt-4 text-3xl font-bold">Explorador</h3>
-              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Compara un par de herramientas dentro de una misma categoría. Por ejemplo, dos opciones de escritura con IA, probadas en tu propio trabajo.</p>
+              <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Explorador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único</span></p>
+              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y accede a tus 2 IAs ideales, elegidas según cómo trabajas.</p>
               <Button variant="secondary" size="lg" className="mt-8 min-h-12 w-full whitespace-normal" asChild>
-                <a href="#registro" onClick={() => registerInterest("cta_registro_explorador", "Explorador")}>Me interesa Explorador <ArrowRight aria-hidden /></a>
+                <Link to="/entrar" search={{ modo: "registro", plan: "Explorador" }} onClick={() => void trackEvent("cta_pack_explorador", "Explorador")}>Elegir Explorador <ArrowRight aria-hidden /></Link>
               </Button>
             </article>
             <article className="flex flex-col rounded-md border border-primary/60 bg-background p-7 sm:p-9">
               <span className="text-sm font-semibold text-primary">Para explorar distintas tareas</span>
               <h3 className="mt-4 text-3xl font-bold">Comparador</h3>
-              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Prueba varias herramientas de categorías diferentes a la vez. Ideal si escribes, creas imágenes o video y resuelves distintas tareas en tu día a día.</p>
+              <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Comparador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único</span></p>
+              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y compara tus 4 IAs ideales, de propósitos distintos, en un solo lugar.</p>
               <Button size="lg" className="mt-8 min-h-12 w-full whitespace-normal" asChild>
-                <a href="#registro" onClick={() => registerInterest("cta_registro_comparador", "Comparador")}>Me interesa Comparador <ArrowRight aria-hidden /></a>
+                <Link to="/entrar" search={{ modo: "registro", plan: "Comparador" }} onClick={() => void trackEvent("cta_pack_comparador", "Comparador")}>Elegir Comparador <ArrowRight aria-hidden /></Link>
               </Button>
             </article>
           </div>
-          <p className="mt-7 max-w-3xl text-sm text-muted-foreground">Aún no hemos activado los pagos. Regístrate para elegir tu pack sin compromiso y te avisamos apenas abramos cupos.</p>
+          <p className="mt-7 max-w-3xl text-sm text-muted-foreground">Pago único, sin suscripción mensual. Al crear tu cuenta haces el test y entras directo a tus IAs.</p>
         </div>
       </section>
 

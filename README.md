@@ -23,6 +23,10 @@ Cada persona que abre el test genera una fila en `test_sessions`, que se actuali
 - `/entrar`: registro e inicio de sesión con correo y contraseña (Supabase Auth). Para el prototipo conviene desactivar
   *Authentication → Sign In / Providers → Email → Confirm email*, así la cuenta queda activa al instante.
 - `/app`: chats guardados en `chats` y `messages` (cada usuario ve solo los suyos). Límites diarios en `src/lib/app-config.ts`.
+- Planes (pago **simulado**): al registrarse se elige Explorador (top 2 IAs) o Comparador (top 4) y se "paga".
+  Solo se aprueba la tarjeta de prueba **número `1` y CVV `1`** (cualquier vencimiento y cuotas); cualquier otra se rechaza.
+  Los datos de tarjeta nunca salen del navegador. Luego un test corto de match (`src/lib/match-quiz.ts`) elige las IAs del plan.
+- IAs disponibles (nombres, propósitos y prompts): `src/lib/ais.ts`. Proyectos = carpetas de chats con nombre sugerido por IA.
 - Texto: Gemini. Imágenes: Qwen-Image 2.1 (ver `tools/qwen-image-server/README.md`). La aclaración de que son simulaciones
   está solo en el botón de información (esquina inferior derecha).
 - Logos: pon `src/assets/logoNombre.png` (logo con nombre) y `src/assets/logo.png` (isotipo); mientras no existan se dibuja el logo del manual.

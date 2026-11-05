@@ -561,7 +561,7 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
             )}
             {!authSession && (
               <Button className="mt-6 w-full" size="lg" asChild>
-                <Link to="/entrar" search={{ modo: "registro" }} onClick={() => void trackEvent("test_cta_crear_cuenta")}>Crear mi cuenta y seguir probando <ArrowRight aria-hidden /></Link>
+                <Link to="/entrar" search={pack ? { modo: "registro", plan: pack } : { modo: "registro" }} onClick={() => void trackEvent("test_cta_crear_cuenta", pack ?? undefined)}>Crear mi cuenta y seguir probando <ArrowRight aria-hidden /></Link>
               </Button>
             )}
             <Button className={authSession ? "mt-6 w-full" : "mt-2 w-full"} size="lg" variant={authSession && (pack || motivo) ? "default" : "ghost"} onClick={() => reset(false)}>Cerrar</Button>

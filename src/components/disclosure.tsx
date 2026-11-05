@@ -12,13 +12,13 @@ function DisclosureContent() {
       <DialogDescription className="text-sm text-muted-foreground">Matchia está en fase de validación. Esto es lo que debes saber.</DialogDescription>
       <ul className="grid gap-3 text-sm leading-relaxed text-foreground">
         <li>
-          <strong>Las herramientas son simulaciones.</strong> Cuando pruebas una IA con su nombre (por ejemplo Jasper o CustomGPT), no es la herramienta oficial: es una vista previa del tipo de resultado que podrías obtener.
+          <strong>Las herramientas son simulaciones.</strong> Cuando usas una IA con su nombre (por ejemplo Jasper, Tabnine o Midjourney), no es la herramienta oficial ni tenemos relación con esas empresas: es una vista previa del tipo de resultado que podrías obtener.
         </li>
         <li>
           <strong>Qué IA responde de verdad.</strong> Los textos los genera <strong>Google Gemini</strong> y las imágenes <strong>Qwen-Image 2.1</strong> (modelo abierto de Alibaba). La calidad puede ser distinta a la de cada herramienta real.
         </li>
         <li>
-          <strong>No hay cobros.</strong> Los packs y los pagos todavía no están activos; nada de lo que hagas aquí genera un cargo.
+          <strong>Los pagos son simulados.</strong> No hay cobros ni pasarela de pago. Los datos de tarjeta que escribas no se envían, no se guardan y no se procesan: solo se acepta la tarjeta de prueba del proyecto.
         </li>
         <li>
           <strong>Tus datos.</strong> Guardamos tus chats y respuestas del test para mejorar el prototipo y no los compartimos con terceros. Tus mensajes se envían a esas IAs solo para generar la respuesta.

@@ -114,6 +114,11 @@
   --sidebar-ring: #ff6b4a;
 }
 
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-50% - 0.5rem)); }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
