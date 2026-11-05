@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { ArrowRight, Check, CheckCircle2, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { MONTH_OPTIONS, NO_PACK_REASONS, PACKS, PAID_AIS, PARAMS, USD_TO_COP, fo
 import { saveTestSession, type TestSession } from "@/lib/test-session.functions";
 import { DemoPanel, type DemoProgress } from "@/components/demo-panel";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/lib/auth";
 
 const CATS: Cat[] = ["Escritura", "Video", "Imagen", "Código", "Productividad"];
 const all = (n: number) => Object.fromEntries(CATS.map((c) => [c, n])) as Partial<Record<Cat, number>>;
@@ -153,6 +155,7 @@ function Scale({ value, onChange }: { value: number | null; onChange: (n: number
 
 export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const saveFn = useServerFn(saveTestSession);
+  const { session: authSession } = useSession();
   const sessionId = useRef<string>("");
   const session = useRef(emptySession());
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -556,7 +559,12 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 </div>
               </>
             )}
-            <Button className="mt-6 w-full" size="lg" variant={pack || motivo ? "default" : "ghost"} onClick={() => reset(false)}>Cerrar</Button>
+            {!authSession && (
+              <Button className="mt-6 w-full" size="lg" asChild>
+                <Link to="/entrar" search={{ modo: "registro" }} onClick={() => void trackEvent("test_cta_crear_cuenta")}>Crear mi cuenta y seguir probando <ArrowRight aria-hidden /></Link>
+              </Button>
+            )}
+            <Button className={authSession ? "mt-6 w-full" : "mt-2 w-full"} size="lg" variant={authSession && (pack || motivo) ? "default" : "ghost"} onClick={() => reset(false)}>Cerrar</Button>
           </div>
         )}
       </DialogContent>

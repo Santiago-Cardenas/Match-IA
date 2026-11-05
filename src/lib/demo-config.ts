@@ -15,10 +15,7 @@ export type ToolConfig = {
   placeholder: string;
 };
 
-/** Pon en false cuando la demo use la herramienta oficial. */
-export const SHOW_DEMO_DISCLAIMER = true;
-export const DEMO_DISCLAIMER =
-  "Vista previa de demo — ejemplo del tipo de resultado, no es la herramienta oficial";
+// La aclaración de que las herramientas son simulaciones vive solo en el botón de información (components/disclosure.tsx).
 
 export const MAX_INPUT_CHARS = 500;
 /** Prompts máximos por prueba (texto y chat). La imagen sigue siendo de 1 prompt. */

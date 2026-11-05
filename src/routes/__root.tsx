@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { DisclosureButton } from "@/components/disclosure";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -119,6 +120,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <DisclosureButton />
     </QueryClientProvider>
   );
 }

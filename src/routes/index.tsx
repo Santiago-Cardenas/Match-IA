@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowDownRight,
@@ -20,6 +20,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand-logo";
+import { useSession } from "@/lib/auth";
 import { WaitlistForm, type PackId } from "@/components/waitlist-dialog";
 import { MatchTestDialog } from "@/components/match-test-dialog";
 import { captureUtm, trackEvent } from "@/lib/tracking";
@@ -91,6 +93,7 @@ const FAQ = [
 function Landing() {
   const [pack, setPack] = useState<PackId | "">("");
   const [testOpen, setTestOpen] = useState(false);
+  const { session } = useSession();
 
   useEffect(() => {
     captureUtm();
@@ -129,10 +132,15 @@ function Landing() {
         />
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-background/95 via-background/85 to-background/35 sm:from-background/95 sm:via-background/70 sm:to-background/20" />
         <header className="section-shell flex items-center justify-between gap-4 py-6">
-          <a href="#inicio" className="font-display text-2xl font-bold text-foreground" aria-label="MatchIA, inicio">Match<span className="text-primary">IA</span><span className="text-primary">.</span></a>
-          <Button variant="outline" size="sm" onClick={() => openTest("cta_header_test")}>
+          <a href="#inicio" className="text-2xl" aria-label="Matchia, inicio"><BrandLogo /></a>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground" asChild>
+              {session ? <Link to="/app">Ir a la app</Link> : <Link to="/entrar">Iniciar sesión</Link>}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => openTest("cta_header_test")}>
             Haz el test <ArrowRight aria-hidden />
           </Button>
+          </div>
         </header>
         <div id="inicio" className="section-shell flex flex-1 flex-col justify-center pb-12 pt-10 sm:pb-16">
           <span className="eyebrow text-primary"><Sparkles className="size-3.5" aria-hidden /> Acceso real, decisiones tuyas</span>
@@ -350,7 +358,7 @@ function Landing() {
         </div>
       </section>
       <footer className="border-t border-border py-7">
-        <div className="section-shell flex flex-col justify-between gap-2 text-xs text-muted-foreground sm:flex-row"><p>MatchIA · Colombia</p><p>Acceso real. Criterio propio. Próximamente.</p></div>
+        <div className="section-shell flex flex-col justify-between gap-2 text-xs text-muted-foreground sm:flex-row"><p>Matchia · Colombia</p><p>Acceso real. Criterio propio. Próximamente.</p></div>
       </footer>
     </main>
   );

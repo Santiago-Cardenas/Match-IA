@@ -12,6 +12,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      chats: {
+        Row: {
+          created_at: string
+          herramienta: string
+          id: string
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          herramienta: string
+          id?: string
+          titulo?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          herramienta?: string
+          id?: string
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cta_clicks: {
         Row: {
           created_at: string
@@ -114,6 +141,42 @@ export type Database = {
           utm_medium?: string | null
           utm_source?: string | null
           whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          chat_id: string
+          contenido: string
+          created_at: string
+          herramienta: string | null
+          id: string
+          imagen_url: string | null
+          role: string
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          chat_id: string
+          contenido?: string
+          created_at?: string
+          herramienta?: string | null
+          id?: string
+          imagen_url?: string | null
+          role: string
+          tipo?: string
+          user_id: string
+        }
+        Update: {
+          chat_id?: string
+          contenido?: string
+          created_at?: string
+          herramienta?: string | null
+          id?: string
+          imagen_url?: string | null
+          role?: string
+          tipo?: string
+          user_id?: string
         }
         Relationships: []
       }

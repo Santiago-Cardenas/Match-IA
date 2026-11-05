@@ -5,10 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * MatchIA design system.
- * Base: deep indigo/navy (technology, trust).
- * Accent: warm amber, reserved for CTAs only.
- * All colors in oklch, exposed as semantic tokens.
+ * Matchia design system (manual de identidad v1.0).
+ * Navy #14213D (base, confianza) · Coral #FF6B4A (acciones, CTA) · Ámbar #FFB449 (destaque)
+ * Nube #E9E9EF (bordes) · Fondo #FAFAF8 · Slate #6E7180 (texto secundario) · Tinta #1A1A1A (texto).
+ * Tipografías: Space Grotesk (títulos) e Inter (texto). Radios: 12px tarjetas, 8px botones.
  */
 
 @theme inline {
@@ -56,7 +56,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --shadow-glow: 0 24px 70px -30px oklch(0.72 0.17 55 / 0.55);
+  --shadow-glow: 0 24px 70px -30px rgb(255 107 74 / 0.55);
   --shadow-card: 0 18px 50px -28px oklch(0.05 0.05 265 / 0.9);
 }
 
@@ -75,9 +75,9 @@
   --popover: oklch(0.2 0.048 268);
   --popover-foreground: oklch(0.97 0.008 260);
 
-  /* Warm amber accent, used only for CTAs */
-  --primary: oklch(0.76 0.16 62);
-  --primary-foreground: oklch(0.2 0.05 60);
+  /* Coral: acciones y CTA */
+  --primary: #ff6b4a;
+  --primary-foreground: #14213d;
 
   --secondary: oklch(0.28 0.05 268);
   --secondary-foreground: oklch(0.95 0.01 260);
@@ -96,9 +96,9 @@
 
   --border: oklch(0.32 0.045 268);
   --input: oklch(0.3 0.045 268);
-  --ring: oklch(0.76 0.16 62);
+  --ring: #ff6b4a;
 
-  --chart-1: oklch(0.76 0.16 62);
+  --chart-1: #ff6b4a;
   --chart-2: oklch(0.68 0.13 265);
   --chart-3: oklch(0.72 0.14 158);
   --chart-4: oklch(0.7 0.12 300);
@@ -106,12 +106,12 @@
 
   --sidebar: oklch(0.2 0.048 268);
   --sidebar-foreground: oklch(0.97 0.008 260);
-  --sidebar-primary: oklch(0.76 0.16 62);
+  --sidebar-primary: #ff6b4a;
   --sidebar-primary-foreground: oklch(0.2 0.05 60);
   --sidebar-accent: oklch(0.28 0.05 268);
   --sidebar-accent-foreground: oklch(0.95 0.01 260);
   --sidebar-border: oklch(0.32 0.045 268);
-  --sidebar-ring: oklch(0.76 0.16 62);
+  --sidebar-ring: #ff6b4a;
 }
 
 @layer base {
@@ -168,4 +168,50 @@
     radial-gradient(60% 55% at 15% 0%, oklch(0.62 0.13 265 / 0.35) 0%, transparent 60%),
     radial-gradient(50% 50% at 92% 8%, oklch(0.76 0.16 62 / 0.22) 0%, transparent 62%),
     radial-gradient(70% 60% at 50% 100%, oklch(0.24 0.06 270 / 0.9) 0%, transparent 70%);
+}
+
+/* Tema oscuro de la app con sesión, basado en el navy del manual (clase en <body>, así también aplica a los diálogos). */
+.app-theme {
+  --background: #14213d;
+  --foreground: #f4f5f8;
+  --surface: #1b2a4a;
+  --surface-foreground: #f4f5f8;
+  --card: #1b2a4a;
+  --card-foreground: #f4f5f8;
+  --popover: #1b2a4a;
+  --popover-foreground: #f4f5f8;
+  --primary: #ff6b4a;
+  --primary-foreground: #14213d;
+  --secondary: #24355a;
+  --secondary-foreground: #f4f5f8;
+  --muted: #1b2a4a;
+  --muted-foreground: #a9aec0;
+  --accent: #24355a;
+  --accent-foreground: #f4f5f8;
+  --border: #2a3a60;
+  --input: #2a3a60;
+  --ring: #ff6b4a;
+  --sidebar: #0e172b;
+}
+
+/* Respuestas en Markdown dentro del chat. */
+@utility chat-markdown {
+  line-height: 1.7;
+  & > * + * { margin-top: 0.75rem; }
+  & h1, & h2, & h3 { font-weight: 700; line-height: 1.3; margin-top: 1.25rem; }
+  & h1 { font-size: 1.35rem; }
+  & h2 { font-size: 1.2rem; }
+  & h3 { font-size: 1.05rem; }
+  & ul { list-style: disc; padding-left: 1.4rem; }
+  & ol { list-style: decimal; padding-left: 1.4rem; }
+  & li + li { margin-top: 0.25rem; }
+  & a { color: #ff8a6e; text-decoration: underline; }
+  & strong { font-weight: 650; }
+  & code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.875em; background: rgb(255 255 255 / 0.08); border-radius: 6px; padding: 0.1rem 0.35rem; }
+  & pre { background: #0b1324; border: 1px solid #2a3a60; border-radius: 12px; padding: 1rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6; }
+  & pre code { background: transparent; padding: 0; font-size: inherit; }
+  & table { width: 100%; border-collapse: collapse; font-size: 0.9rem; display: block; overflow-x: auto; }
+  & th, & td { border: 1px solid #2a3a60; padding: 0.4rem 0.6rem; text-align: left; }
+  & th { background: #1b2a4a; font-weight: 600; }
+  & blockquote { border-left: 3px solid #ff6b4a; padding-left: 0.9rem; color: #a9aec0; }
 }

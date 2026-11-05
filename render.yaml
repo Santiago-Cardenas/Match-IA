@@ -21,3 +21,11 @@ services:
         sync: false
       - key: RESULTS_KEY
         sync: false
+      - key: IMAGE_PROVIDER
+        sync: false
+      - key: QWEN_IMAGE_URL
+        sync: false
+      - key: QWEN_IMAGE_TOKEN
+        sync: false
+      - key: MODELSCOPE_TOKEN
+        sync: false

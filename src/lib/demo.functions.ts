@@ -8,8 +8,7 @@ type Result = { ok: true; text?: string; image?: string } | { ok: false; reason:
 const unavailable = (reason: "agotada" | "error"): Result => ({ ok: false, reason, message: DEMO_UNAVAILABLE });
 const apiBusy = (): Result => ({ ok: false, reason: "agotada", message: API_BUSY });
 
-// Devuelve null si no hay cupo; si hay, una función que registra el uso (se llama solo si la demo salió bien).
-// Cada prompt cuenta como un uso.
+// Cada prompt cuenta como un uso. Devuelve null si no hay cupo; si hay, una función que registra el uso.
 async function checkQuota(email: string, kind: "text" | "image", categoria: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count: leads } = await supabaseAdmin.from("leads_test").select("id", { count: "exact", head: true }).ilike("email", email);
@@ -25,26 +24,6 @@ async function checkQuota(email: string, kind: "text" | "image", categoria: stri
   return async () => {
     await supabaseAdmin.from("demo_usage").insert({ email, kind, categoria });
   };
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// Llama a Gemini probando varios modelos y reintentando si hay alta demanda (503/429/500).
-async function callGemini(models: string[], key: string, body: unknown): Promise<Response | null> {
-  for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) return res;
-      console.error("Gemini error", model, res.status, await res.text());
-      if (![429, 500, 503].includes(res.status)) break;
-      await sleep(800);
-    }
-  }
-  return null;
 }
 
 const textInput = z.object({
@@ -64,24 +43,14 @@ export const runTextDemo = createServerFn({ method: "POST" })
     const last = data.messages[data.messages.length - 1]!;
     if (last.role !== "user" || last.text.length > MAX_INPUT_CHARS) return unavailable("error");
     if (users.length > MAX_DEMO_PROMPTS) return unavailable("agotada");
-    const messages = data.messages;
-
-    const key = process.env["GEMINI_API_KEY"];
-    if (!key) return unavailable("error");
     try {
       const commit = await checkQuota(data.email, "text", data.categoria);
       if (!commit) return unavailable("agotada");
-      const res = await callGemini([tool.modelo!, "gemini-flash-lite-latest"], key, {
-        systemInstruction: { parts: [{ text: tool.promptSistema }] },
-        contents: messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
-        generationConfig: { maxOutputTokens: 400 },
-      });
-      if (!res) return apiBusy();
-      const json = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-      const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim();
-      if (!text) return unavailable("error");
+      const { generateText } = await import("./ai.server");
+      const res = await generateText(tool.promptSistema, data.messages, tool.modelo!, 400);
+      if (!res.ok) return res.busy ? apiBusy() : unavailable("error");
       await commit();
-      return { ok: true, text };
+      return { ok: true, text: res.text };
     } catch (e) {
       console.error("Text demo failed", e);
       return unavailable("error");
@@ -93,35 +62,17 @@ const imageInput = z.object({ email: z.string().trim().email().max(255), prompt:
 export const runImageDemo = createServerFn({ method: "POST" })
   .inputValidator((d) => imageInput.parse(d))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env["GEMINI_API_KEY"];
-    if (!key) return unavailable("error");
-    const tool = TOOLS.Imagen;
-    const model = process.env["GEMINI_IMAGE_MODEL"] || tool.modelo;
     try {
       const commit = await checkQuota(data.email, "image", "Imagen");
       if (!commit) return unavailable("agotada");
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: tool.promptSistema + data.prompt }] }],
-          generationConfig: { responseModalities: ["IMAGE"] },
-        }),
-      });
+      const { generateImage } = await import("./ai.server");
+      const res = await generateImage(data.prompt);
       if (!res.ok) {
-        // 429 / limit 0 = el plan gratuito no incluye generación de imágenes.
-        console.error("Gemini image error", res.status, await res.text());
-        return res.status === 402 || res.status === 429 || res.status === 503 ? apiBusy() : unavailable("error");
+        if (res.blocked) return { ok: false, reason: "error", message: "No podemos generar esa imagen. Prueba con otra descripción." };
+        return res.busy ? apiBusy() : unavailable("error");
       }
-      const json = (await res.json()) as {
-        candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[];
-      };
-      const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-      const b64 = part?.inlineData?.data;
-      const mime = part?.inlineData?.mimeType || "image/png";
-      if (!b64) return unavailable("error");
       await commit();
-      return { ok: true, image: `data:${mime};base64,${b64}` };
+      return { ok: true, image: `data:${res.mime};base64,${Buffer.from(res.bytes).toString("base64")}` };
     } catch (e) {
       console.error("Image demo failed", e);
       return unavailable("error");

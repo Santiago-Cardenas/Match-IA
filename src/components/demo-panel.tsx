@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, CheckCircle2, Info, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DisclosureButton } from "@/components/disclosure";
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { DEMO_DISCLAIMER, DEMO_UNAVAILABLE, MAX_DEMO_PROMPTS, MAX_INPUT_CHARS, SHOW_DEMO_DISCLAIMER, TOOLS, type Cat } from "@/lib/demo-config";
+import { DEMO_UNAVAILABLE, MAX_DEMO_PROMPTS, MAX_INPUT_CHARS, TOOLS, type Cat } from "@/lib/demo-config";
 import { runImageDemo, runTextDemo } from "@/lib/demo.functions";
 import { trackEvent } from "@/lib/tracking";
 
@@ -93,15 +94,13 @@ export function DemoPanel({
 
   return (
     <div>
-      <DialogTitle className="text-2xl font-bold">Prueba {tool.nombre}</DialogTitle>
+      <div className="flex items-center gap-1">
+        <DialogTitle className="text-2xl font-bold">Prueba {tool.nombre}</DialogTitle>
+        <DisclosureButton variant="inline" />
+      </div>
       <DialogDescription className="mt-1 text-sm text-muted-foreground">
         {tool.descripcion} · {maxPrompts === 1 ? "1 prompt" : `hasta ${maxPrompts} prompts`}
       </DialogDescription>
-      {SHOW_DEMO_DISCLAIMER && (
-        <p className="mt-4 flex items-start gap-2 rounded-md border border-primary/40 bg-primary/10 p-3 text-xs font-semibold text-foreground">
-          <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden /> {DEMO_DISCLAIMER}
-        </p>
-      )}
 
       <div className="mt-5 grid gap-3">
         {messages.map((m, i) => (

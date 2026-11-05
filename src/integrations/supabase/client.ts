@@ -17,8 +17,10 @@ function createSupabaseClient() {
     throw new Error(message);
   }
 
+  // En el navegador se guarda la sesión (login de la app); en SSR no hay sesión.
+  const isBrowser = typeof window !== "undefined";
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    auth: { persistSession: isBrowser, autoRefreshToken: isBrowser, detectSessionInUrl: isBrowser },
   });
 }
 
