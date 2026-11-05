@@ -20,18 +20,18 @@ $py = "$env:USERPROFILE\matchia-qwen\.venv\Scripts\python.exe"
 ```
 
 ## Usarlo con la app
-1. Inicia el servidor (deja la ventana abierta):
+1. Una sola vez: cuenta gratis en [ngrok](https://ngrok.com), `ngrok config add-authtoken TU_AUTHTOKEN`
+   y copia tu dominio gratuito (Dashboard → Domains, termina en `.ngrok-free.dev` o `.ngrok-free.app`).
+2. Cada vez, desde la carpeta del proyecto (deja la ventana abierta):
    ```powershell
-   .\tools\qwen-image-server\start.ps1 -Token "una-clave-larga"
+   cd "C:\Users\santi\OneDrive\Documentos\Icesi\Semestre 10\Innovacion_3\Match-IA"
+   .\tools\qwen-image-server\start.ps1 -Token "una-clave-larga" -Dominio "tu-dominio.ngrok-free.dev"
    ```
-   Espera a ver `Uvicorn running on http://127.0.0.1:8000`. Prueba: `curl http://127.0.0.1:8000/health`.
-2. Exponlo a internet con [ngrok](https://ngrok.com) (la cuenta gratis trae un dominio fijo):
-   ```powershell
-   ngrok http 8000 --url=TU-DOMINIO.ngrok-free.app
-   ```
+   Abre ngrok en otra ventana y arranca el servidor. Listo cuando ves `Uvicorn running on http://127.0.0.1:8000`.
+   Prueba: abre `https://tu-dominio.ngrok-free.dev/health` en el navegador.
 3. En Render (y en tu `.env` local):
    ```
-   QWEN_IMAGE_URL=https://TU-DOMINIO.ngrok-free.app
+   QWEN_IMAGE_URL=https://tu-dominio.ngrok-free.dev
    QWEN_IMAGE_TOKEN=una-clave-larga
    ```
 Mientras el PC esté apagado o el servidor cerrado, la app muestra "Hay mucha demanda en este momento" al pedir imágenes.
