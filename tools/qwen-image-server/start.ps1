@@ -1,5 +1,5 @@
-# Inicia el servidor de imágenes de Matchia (Qwen-Image 2.1) en http://127.0.0.1:8000
-# y, si pasas -Dominio, abre el túnel de ngrok en otra ventana.
+# Inicia el servidor de imagenes de Matchia (Qwen-Image 2.1) en http://127.0.0.1:8000
+# y, si pasas -Dominio, abre el tunel de ngrok en otra ventana.
 #
 # Uso:
 #   .\start.ps1 -Token "tu-clave" -Dominio "tu-dominio.ngrok-free.dev"
@@ -17,7 +17,7 @@ if ($Dominio) {
   $Dominio = $Dominio -replace '^https?://', '' -replace '/$', ''
   # --domain funciona en versiones viejas y nuevas del agente de ngrok.
   Start-Process ngrok -ArgumentList "http", "8000", "--domain=$Dominio"
-  Write-Host "Túnel de ngrok abierto en otra ventana: https://$Dominio"
+  Write-Host "Tunel de ngrok abierto en otra ventana: https://$Dominio"
 }
 
 $env:QWEN_IMAGE_TOKEN = $Token
