@@ -57,15 +57,15 @@ export const MONTH_OPTIONS = [
 export const PACKS = [
   {
     id: "Explorador",
-    precio: "$9.90 USD",
-    puntos: ["48 horas de acceso a 2 herramientas", "Entorno de pruebas seguro", "Ideal para tareas rápidas y directas"],
+    precio: "$690.000 COP",
+    puntos: ["Hasta 5 cuentas de tu equipo", "3 IAs ideales por cuenta, según tu test y el de tu empresa", "Pago único por empresa, sin renovación"],
     cta: "Me interesa el Pack Explorador",
     recomendado: false,
   },
   {
     id: "Comparador",
-    precio: "$19.90 USD",
-    puntos: ["Acceso a 5 modelos tope de gama", "Diagnóstico y tabla de resultados", "Pago sin auto-renovación"],
+    precio: "$1.490.000 COP",
+    puntos: ["Hasta 10 cuentas de tu equipo", "7 IAs ideales por cuenta, de propósitos distintos", "Sesión de recomendación con tu equipo"],
     cta: "Me interesa el Pack Comparador",
     recomendado: true,
   },

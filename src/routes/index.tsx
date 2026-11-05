@@ -270,13 +270,14 @@ function Landing() {
       <section id="packs" className="scroll-mt-8 border-y border-border bg-surface/60 py-20 sm:py-28">
         <div className="section-shell">
           <span className="eyebrow">04 / Los packs</span>
-          <h2 className="mt-5 max-w-2xl text-3xl font-bold sm:text-5xl">Dos formas de probar. Tú eliges.</h2>
+          <h2 className="mt-5 max-w-2xl text-3xl font-bold sm:text-5xl">Dos packs para tu empresa. Tú eliges.</h2>
           <div className="mt-12 grid gap-5 md:grid-cols-2">
             <article className="flex flex-col rounded-md border border-border bg-background p-7 sm:p-9">
               <span className="text-sm font-semibold text-primary">Para enfocarte en una tarea</span>
               <h3 className="mt-4 text-3xl font-bold">Explorador</h3>
-              <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Explorador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único</span></p>
-              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y accede a tus 3 IAs ideales, elegidas según cómo trabajas. Las demás las puedes probar gratis cada día.</p>
+              <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Explorador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único por empresa</span></p>
+              <p className="mt-1 text-sm font-semibold">Hasta {PLANS.Explorador.cuentas} cuentas de tu equipo</p>
+              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Tu empresa hace su test y cada persona hace el suyo para acceder a sus {PLANS.Explorador.ias} IAs ideales, elegidas según cómo trabaja y lo que necesita la empresa. Las demás se pueden probar gratis cada día.</p>
               <Button variant="secondary" size="lg" className="mt-8 min-h-12 w-full whitespace-normal" asChild>
                 <Link to="/entrar" search={{ modo: "registro", plan: "Explorador" }} onClick={() => void trackEvent("cta_pack_explorador", "Explorador")}>Elegir Explorador <ArrowRight aria-hidden /></Link>
               </Button>
@@ -284,14 +285,15 @@ function Landing() {
             <article className="flex flex-col rounded-md border border-primary/60 bg-background p-7 sm:p-9">
               <span className="text-sm font-semibold text-primary">Para explorar distintas tareas</span>
               <h3 className="mt-4 text-3xl font-bold">Comparador</h3>
-              <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Comparador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único</span></p>
-              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Haz el test de match y compara tus 7 IAs ideales, de propósitos distintos, en un solo lugar, con más pruebas diarias de las demás.</p>
+              <p className="mt-2 font-display text-2xl font-bold text-primary">{PLANS.Comparador.precio} <span className="text-sm font-normal text-muted-foreground">· pago único por empresa</span></p>
+              <p className="mt-1 text-sm font-semibold">Hasta {PLANS.Comparador.cuentas} cuentas de tu equipo</p>
+              <p className="mt-5 flex-1 text-base leading-relaxed text-muted-foreground">Cada persona compara sus {PLANS.Comparador.ias} IAs ideales, de propósitos distintos, en un solo lugar, con más pruebas diarias de las demás y una sesión de recomendación para tu equipo.</p>
               <Button size="lg" className="mt-8 min-h-12 w-full whitespace-normal" asChild>
                 <Link to="/entrar" search={{ modo: "registro", plan: "Comparador" }} onClick={() => void trackEvent("cta_pack_comparador", "Comparador")}>Elegir Comparador <ArrowRight aria-hidden /></Link>
               </Button>
             </article>
           </div>
-          <p className="mt-7 max-w-3xl text-sm text-muted-foreground">Pago único, sin suscripción mensual. Al crear tu cuenta haces el test y entras directo a tus IAs.</p>
+          <p className="mt-7 max-w-3xl text-sm text-muted-foreground">Pago único por empresa, sin suscripción mensual. La empresa registra su cuenta, hace su test y afilia a su equipo; cada persona entra con su correo, hace su test y usa sus IAs.</p>
         </div>
       </section>
 

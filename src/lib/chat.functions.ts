@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { User } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { APP_LIMITS, APP_MESSAGES, HISTORY_TURNS, MAX_MESSAGE_CHARS } from "./app-config";
 import { AIS, AI_IDS, identityRule, toAiId, type Ai, type AiId } from "./ais";
-import { MATCH_QUIZ, topAis, validAnswers } from "./match-quiz";
+import { EMPRESA_QUIZ, MATCH_QUIZ, rankAis, rankEmpresa, validAnswers, type MatchAnswers } from "./match-quiz";
 import { IMAGE_TOKENS, MES_COP, MES_DIAS, PLANS, TOKEN_PACKS, type PlanId } from "./plans";
-import { USD_TO_COP } from "./test-config";
 
 export type ChatMessage = {
   id: string;
@@ -18,6 +18,9 @@ export type ChatMessage = {
 };
 
 export type Suscripcion = { plan: PlanId; ias: AiId[]; tokens: number };
+/** Empresa de la cuenta. ias = recomendadas por el test de la empresa; cuentas = afiliadas (incluye invitaciones pendientes). */
+export type Empresa = { id: string; nombre: string; plan: PlanId; rol: "admin" | "miembro"; testHecho: boolean; ias: AiId[]; cuentas: number };
+export type Cuenta = { email: string; nombre: string | null; rol: "admin" | "miembro"; activa: boolean; testHecho: boolean };
 /** Cómo se accede a una IA: incluida en el plan, acceso mensual, prueba diaria o saldo de tokens. */
 export type Via = "plan" | "mes" | "prueba" | "tokens";
 
@@ -37,8 +40,47 @@ async function requireUser(token: string) {
 async function getSub(db: Db, userId: string): Promise<Suscripcion | null> {
   const { data } = await db.from("suscripciones").select("plan, ias, tokens").eq("user_id", userId).maybeSingle();
   if (!data) return null;
-  return { plan: data.plan as PlanId, ias: data.ias.map(toAiId).filter((x): x is AiId => !!x), tokens: data.tokens ?? 0 };
+  return { plan: data.plan as PlanId, ias: toAiIds(data.ias), tokens: data.tokens ?? 0 };
 }
+
+const toAiIds = (ias: string[]) => ias.map(toAiId).filter((x): x is AiId => !!x);
+
+/**
+ * Empresa de la cuenta. Si su correo fue afiliado por una empresa y aún no estaba unida, la une aquí
+ * y le crea la suscripción con el plan de la empresa (no paga nada: el pack ya lo pagó la empresa).
+ */
+async function miEmpresa(db: Db, user: User): Promise<(Empresa & { respuestas: MatchAnswers | null }) | null> {
+  let { data: m } = await db.from("miembros").select("empresa_id, rol").eq("user_id", user.id).maybeSingle();
+  if (!m && user.email) {
+    const nombre = String(user.user_metadata?.["nombre"] ?? "").trim() || null;
+    ({ data: m } = await db
+      .from("miembros")
+      .update({ user_id: user.id, nombre })
+      .eq("email", user.email.toLowerCase())
+      .is("user_id", null)
+      .select("empresa_id, rol")
+      .maybeSingle());
+  }
+  if (!m) return null;
+  const [{ data: e }, { count }] = await Promise.all([
+    db.from("empresas").select("id, nombre, plan, respuestas, ias").eq("id", m.empresa_id).single(),
+    db.from("miembros").select("email", { count: "exact", head: true }).eq("empresa_id", m.empresa_id),
+  ]);
+  if (!e) return null;
+  if (!(await getSub(db, user.id))) await db.from("suscripciones").insert({ user_id: user.id, plan: e.plan, ias: [] });
+  return {
+    id: e.id,
+    nombre: e.nombre,
+    plan: e.plan as PlanId,
+    rol: m.rol as Empresa["rol"],
+    testHecho: !!e.respuestas,
+    ias: toAiIds(e.ias),
+    cuentas: count ?? 1,
+    respuestas: (e.respuestas as MatchAnswers | null) ?? null,
+  };
+}
+
+const publica = ({ respuestas: _, ...e }: Empresa & { respuestas: unknown }): Empresa => e;
 
 const since24h = () => new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
@@ -240,6 +282,7 @@ export const getAppInfo = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const { db, user } = await requireUser(data.token);
+      const empresa = await miEmpresa(db, user); // antes que getSub: puede crear la suscripción de una cuenta afiliada
       const [sub, texto, imagen, usadas, accesos] = await Promise.all([
         getSub(db, user.id),
         usage(db, "texto", user.id),
@@ -252,6 +295,7 @@ export const getAppInfo = createServerFn({ method: "POST" })
       return {
         ok: true as const,
         suscripcion: sub,
+        empresa: empresa && publica(empresa),
         restantes: { texto: Math.max(0, APP_LIMITS.textoPorUsuario - texto), imagen: Math.max(0, APP_LIMITS.imagenPorUsuario - imagen) },
         pruebas,
         accesos,
@@ -261,40 +305,155 @@ export const getAppInfo = createServerFn({ method: "POST" })
     }
   });
 
-/** Activa el plan "comprado" (el pago simulado ya se aprobó en el navegador). No cambia un plan existente. */
+/**
+ * Registra la empresa que "compró" el pack (el pago simulado ya se aprobó en el navegador): crea la empresa,
+ * deja a la cuenta como administradora y activa su plan. Si la cuenta ya pertenece a una empresa, no cambia nada.
+ */
 export const activarSuscripcion = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ token, plan: z.enum(["Explorador", "Comparador"]) }).parse(d))
+  .inputValidator((d) => z.object({ token, plan: z.enum(["Explorador", "Comparador"]), empresa: z.string().trim().min(2).max(100) }).parse(d))
   .handler(async ({ data }) => {
     try {
       const { db, user } = await requireUser(data.token);
-      const existing = await getSub(db, user.id);
-      if (existing) return { ok: true as const, suscripcion: existing };
-      const { error } = await db.from("suscripciones").insert({ user_id: user.id, plan: data.plan, ias: [] });
-      if (error) return { ok: false as const };
-      const usd = Number(PLANS[data.plan].precio.replace(/[^\d.]/g, ""));
-      await db.from("compras").insert({ user_id: user.id, tipo: "plan", detalle: data.plan, precio_cop: Math.round(usd * USD_TO_COP) });
-      return { ok: true as const, suscripcion: { plan: data.plan, ias: [], tokens: 0 } as Suscripcion };
+      const actual = await miEmpresa(db, user);
+      const sub = actual && (await getSub(db, user.id));
+      if (actual && sub) return { ok: true as const, suscripcion: sub, empresa: publica(actual) };
+      if (!user.email) return { ok: false as const };
+      const { data: e, error } = await db.from("empresas").insert({ nombre: data.empresa, plan: data.plan, admin_id: user.id }).select("id").single();
+      if (error || !e) return { ok: false as const };
+      const nombre = String(user.user_metadata?.["nombre"] ?? "").trim() || null;
+      const { error: mErr } = await db.from("miembros").insert({ empresa_id: e.id, email: user.email.toLowerCase(), user_id: user.id, nombre, rol: "admin" });
+      if (mErr) {
+        await db.from("empresas").delete().eq("id", e.id);
+        return { ok: false as const };
+      }
+      await db.from("compras").insert({ user_id: user.id, tipo: "plan", detalle: data.plan, precio_cop: PLANS[data.plan].precioCop });
+      const empresa = await miEmpresa(db, user); // también crea la suscripción
+      const nueva = await getSub(db, user.id);
+      if (!empresa || !nueva) return { ok: false as const };
+      return { ok: true as const, suscripcion: nueva, empresa: publica(empresa) };
     } catch {
       return { ok: false as const };
     }
   });
 
-/** Guarda el resultado del test de match: el servidor calcula el top 3 o top 7 según el plan. Solo se hace una vez. */
-export const guardarMatch = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ token, respuestas: z.array(z.array(z.number().int().min(0).max(20)).max(5)).length(MATCH_QUIZ.length) }).parse(d))
+const respuestasSchema = (n: number) => z.array(z.array(z.number().int().min(0).max(20)).max(5)).length(n);
+type Pcts = Partial<Record<AiId, number>>;
+
+/** Test de la empresa: lo hace la cuenta administradora, una sola vez. Define las IAs recomendadas para la empresa. */
+export const guardarTestEmpresa = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token, respuestas: respuestasSchema(EMPRESA_QUIZ.length) }).parse(d))
   .handler(async ({ data }) => {
     try {
       const { db, user } = await requireUser(data.token);
-      const sub = await getSub(db, user.id);
-      if (!sub) return { ok: false as const };
-      if (sub.ias.length) return { ok: true as const, suscripcion: sub };
-      if (!validAnswers(data.respuestas)) return { ok: false as const };
-      const ias = topAis(data.respuestas, PLANS[sub.plan].ias).map((r) => r.id);
-      const { error } = await db.from("suscripciones").update({ ias, respuestas: data.respuestas }).eq("user_id", user.id);
+      const empresa = await miEmpresa(db, user);
+      if (!empresa || empresa.rol !== "admin") return { ok: false as const };
+      if (empresa.testHecho) return { ok: true as const, empresa: publica(empresa), pcts: {} as Pcts };
+      if (!validAnswers(data.respuestas, EMPRESA_QUIZ)) return { ok: false as const };
+      const ranking = rankEmpresa(data.respuestas).slice(0, PLANS[empresa.plan].ias);
+      const ias = ranking.map((r) => r.id);
+      const { error } = await db.from("empresas").update({ respuestas: data.respuestas, ias }).eq("id", empresa.id);
       if (error) return { ok: false as const };
-      return { ok: true as const, suscripcion: { ...sub, ias } as Suscripcion };
+      return { ok: true as const, empresa: { ...publica(empresa), testHecho: true, ias }, pcts: Object.fromEntries(ranking.map((r) => [r.id, r.pct])) as Pcts };
     } catch {
       return { ok: false as const };
+    }
+  });
+
+/**
+ * Test de match de cada cuenta: el servidor calcula el top 3 o top 7 según el plan, combinando las respuestas
+ * de la persona con las del test de su empresa. Solo se hace una vez.
+ */
+export const guardarMatch = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token, respuestas: respuestasSchema(MATCH_QUIZ.length) }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { db, user } = await requireUser(data.token);
+      const empresa = await miEmpresa(db, user);
+      const sub = await getSub(db, user.id);
+      if (!sub || !empresa) return { ok: false as const };
+      if (sub.ias.length) return { ok: true as const, suscripcion: sub, pcts: {} as Pcts };
+      if (!validAnswers(data.respuestas)) return { ok: false as const };
+      const ranking = rankAis(data.respuestas, empresa.respuestas).slice(0, PLANS[sub.plan].ias);
+      const ias = ranking.map((r) => r.id);
+      const { error } = await db.from("suscripciones").update({ ias, respuestas: data.respuestas }).eq("user_id", user.id);
+      if (error) return { ok: false as const };
+      return { ok: true as const, suscripcion: { ...sub, ias } as Suscripcion, pcts: Object.fromEntries(ranking.map((r) => [r.id, r.pct])) as Pcts };
+    } catch {
+      return { ok: false as const };
+    }
+  });
+
+// ---------- Empresa: perfil y cuentas afiliadas ----------
+
+async function listarCuentas(db: Db, empresaId: string): Promise<Cuenta[]> {
+  const { data: rows } = await db.from("miembros").select("email, nombre, rol, user_id, created_at").eq("empresa_id", empresaId).order("created_at", { ascending: true });
+  const ids = (rows ?? []).map((r) => r.user_id).filter((x): x is string => !!x);
+  const { data: subs } = ids.length ? await db.from("suscripciones").select("user_id, ias").in("user_id", ids) : { data: [] };
+  const conTest = new Set((subs ?? []).filter((x) => x.ias.length).map((x) => x.user_id));
+  return (rows ?? []).map((r) => ({ email: r.email, nombre: r.nombre, rol: r.rol as Cuenta["rol"], activa: !!r.user_id, testHecho: !!r.user_id && conTest.has(r.user_id) }));
+}
+
+/** Perfil de la empresa. La lista de cuentas solo la ve la cuenta administradora. */
+export const getEmpresa = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { db, user } = await requireUser(data.token);
+      const empresa = await miEmpresa(db, user);
+      if (!empresa) return { ok: false as const };
+      return { ok: true as const, empresa: publica(empresa), cuentas: empresa.rol === "admin" ? await listarCuentas(db, empresa.id) : [] };
+    } catch {
+      return { ok: false as const };
+    }
+  });
+
+const email = z.string().trim().toLowerCase().email().max(255);
+type CuentasResult = { ok: true; cuentas: Cuenta[] } | { ok: false; message: string };
+
+/** La empresa afilia una cuenta por correo; la persona entra a Matchia creando su cuenta con ese correo. */
+export const afiliarCuenta = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token, email }).parse(d))
+  .handler(async ({ data }): Promise<CuentasResult> => {
+    try {
+      const { db, user } = await requireUser(data.token);
+      const empresa = await miEmpresa(db, user);
+      if (!empresa || empresa.rol !== "admin") return { ok: false, message: "Solo la cuenta administradora puede afiliar cuentas." };
+      const max = PLANS[empresa.plan].cuentas;
+      if (empresa.cuentas >= max) return { ok: false, message: `Tu Pack ${empresa.plan} incluye hasta ${max} cuentas y ya las usaste.` };
+      const { error } = await db.from("miembros").insert({ empresa_id: empresa.id, email: data.email, rol: "miembro" });
+      if (error) return { ok: false, message: error.code === "23505" ? "Ese correo ya está afiliado a una empresa en Matchia." : "No pudimos afiliar la cuenta. Intenta de nuevo." };
+      return { ok: true, cuentas: await listarCuentas(db, empresa.id) };
+    } catch {
+      return { ok: false, message: "No pudimos afiliar la cuenta. Intenta de nuevo." };
+    }
+  });
+
+/** Quita una cuenta de la empresa y libera el cupo. Si ya estaba activa, pierde el acceso a las IAs del plan. */
+export const quitarCuenta = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token, email }).parse(d))
+  .handler(async ({ data }): Promise<CuentasResult> => {
+    try {
+      const { db, user } = await requireUser(data.token);
+      const empresa = await miEmpresa(db, user);
+      if (!empresa || empresa.rol !== "admin") return { ok: false, message: "Solo la cuenta administradora puede quitar cuentas." };
+      const { data: quitada } = await db.from("miembros").delete().eq("empresa_id", empresa.id).eq("email", data.email).eq("rol", "miembro").select("user_id").maybeSingle();
+      if (quitada?.user_id) await db.from("suscripciones").delete().eq("user_id", quitada.user_id);
+      return { ok: true, cuentas: await listarCuentas(db, empresa.id) };
+    } catch {
+      return { ok: false, message: "No pudimos quitar la cuenta. Intenta de nuevo." };
+    }
+  });
+
+/** Antes de crear una cuenta afiliada: confirma que el correo tenga una invitación pendiente. */
+export const invitacionPendiente = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ email }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const db = await admin();
+      const { data: m } = await db.from("miembros").select("email").eq("email", data.email).is("user_id", null).maybeSingle();
+      return { ok: !!m };
+    } catch {
+      return { ok: false };
     }
   });
 

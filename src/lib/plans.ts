@@ -1,28 +1,32 @@
-// Planes de Matchia y precios para IAs fuera del plan. Todos los pagos son simulados (components/plans/payment-form.tsx).
+// Packs de Matchia para empresas y precios para IAs fuera del plan. Todos los pagos son simulados (components/plans/payment-form.tsx).
 import { USD_TO_COP } from "./test-config";
 
 export type PlanId = "Explorador" | "Comparador";
 
 export const PLANS: Record<
   PlanId,
-  { id: PlanId; precio: string; ias: number; pruebasDiarias: number; resumen: string; puntos: string[]; recomendado: boolean }
+  { id: PlanId; precio: string; precioCop: number; cuentas: number; ias: number; pruebasDiarias: number; resumen: string; puntos: string[]; recomendado: boolean }
 > = {
   Explorador: {
     id: "Explorador",
-    precio: "$9.90 USD",
+    precio: "$690.000 COP",
+    precioCop: 690_000,
+    cuentas: 5,
     ias: 3,
     pruebasDiarias: 1,
-    resumen: "Tus 3 IAs ideales",
-    puntos: ["Test de match para encontrar tus 3 IAs ideales", "1 prompt de prueba al día en cada IA que no esté en tu plan", "Chats y proyectos ilimitados"],
+    resumen: "Hasta 5 cuentas · 3 IAs por cuenta",
+    puntos: ["Hasta 5 cuentas de tu equipo, incluida la tuya", "Test de la empresa y test de match para cada cuenta", "3 IAs ideales por cuenta y 1 prompt de prueba al día en las demás", "Chats y proyectos ilimitados"],
     recomendado: false,
   },
   Comparador: {
     id: "Comparador",
-    precio: "$19.90 USD",
+    precio: "$1.490.000 COP",
+    precioCop: 1_490_000,
+    cuentas: 10,
     ias: 7,
     pruebasDiarias: 3,
-    resumen: "Tus 7 IAs ideales",
-    puntos: ["Test de match para encontrar tus 7 IAs ideales", "3 prompts de prueba al día en cada IA que no esté en tu plan", "Chats y proyectos ilimitados"],
+    resumen: "Hasta 10 cuentas · 7 IAs por cuenta",
+    puntos: ["Hasta 10 cuentas de tu equipo, incluida la tuya", "Test de la empresa y test de match para cada cuenta", "7 IAs ideales por cuenta y 3 prompts de prueba al día en las demás", "Sesión de recomendación con el equipo de Matchia"],
     recomendado: true,
   },
 };

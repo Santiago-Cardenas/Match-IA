@@ -147,6 +147,66 @@ export type Database = {
         }
         Relationships: []
       }
+      empresas: {
+        Row: {
+          admin_id: string
+          created_at: string
+          ias: string[]
+          id: string
+          nombre: string
+          plan: string
+          respuestas: Json | null
+          updated_at: string
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          ias?: string[]
+          id?: string
+          nombre: string
+          plan: string
+          respuestas?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          ias?: string[]
+          id?: string
+          nombre?: string
+          plan?: string
+          respuestas?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      miembros: {
+        Row: {
+          created_at: string
+          email: string
+          empresa_id: string
+          nombre: string | null
+          rol: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          empresa_id: string
+          nombre?: string | null
+          rol?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          empresa_id?: string
+          nombre?: string | null
+          rol?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       leads_test: {
         Row: {
           categoria_ganadora: string

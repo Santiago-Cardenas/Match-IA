@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { captureUtm, trackEvent } from "@/lib/tracking";
 import { TOOLS, type Cat } from "@/lib/demo-config";
-import { MONTH_OPTIONS, NO_PACK_REASONS, PACKS, PAID_AIS, PARAMS, USD_TO_COP, formatCop, formatUsd, type PackId } from "@/lib/test-config";
+import { MONTH_OPTIONS, NO_PACK_REASONS, PACKS, PAID_AIS, PARAMS, USD_TO_COP, formatCop, type PackId } from "@/lib/test-config";
 import { saveTestSession, type TestSession } from "@/lib/test-session.functions";
 import { DemoPanel, type DemoProgress } from "@/components/demo-panel";
 import { cn } from "@/lib/utils";
@@ -395,10 +395,10 @@ export function MatchTestDialog({ open, onOpenChange }: { open: boolean; onOpenC
             {gastoUsd > 0 ? (
               <>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tu gasto en IAs que no aprovechaste</p>
-                <DialogTitle className="mt-5 font-display text-5xl font-bold text-primary sm:text-6xl">{formatUsd(gastoUsd)} USD</DialogTitle>
-                <p className="mt-2 font-display text-2xl font-semibold">≈ {formatCop(gastoCop)} COP</p>
+                <DialogTitle className="mt-5 font-display text-4xl font-bold text-primary sm:text-5xl">{formatCop(gastoCop)}</DialogTitle>
+                <p className="mt-2 font-display text-xl font-semibold">pesos colombianos</p>
                 <DialogDescription className="mt-6 text-lg text-foreground">
-                  Has gastado {formatUsd(gastoUsd)} USD, <strong>pero eso cambia ahora.</strong>
+                  Has gastado {formatCop(gastoCop)} COP, <strong>pero eso cambia ahora.</strong>
                 </DialogDescription>
               </>
             ) : (

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { AIS, type AiId } from "@/lib/ais";
 import { comprarMes, comprarTokens } from "@/lib/chat.functions";
-import { MES_COP, MES_DIAS, MES_USD, TOKEN_PACKS, formatCOP, formatTokens, type TokenPackId } from "@/lib/plans";
+import { MES_COP, MES_DIAS, TOKEN_PACKS, formatCOP, formatTokens, type TokenPackId } from "@/lib/plans";
 import { trackEvent } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +89,7 @@ export function UnlockDialog({ ai, open, onOpenChange, token, tokens, onBought }
                 <span className="flex items-center gap-2 font-semibold"><CalendarCheck className="size-4 text-primary" aria-hidden /> Acceso mensual</span>
                 <span className="text-right">
                   <span className="block font-display font-bold text-primary">{formatCOP(MES_COP)}</span>
-                  <span className="block text-[11px] text-muted-foreground">≈ US${MES_USD} · {MES_DIAS} días</span>
+                  <span className="block text-[11px] text-muted-foreground">{MES_DIAS} días</span>
                 </span>
               </span>
               <span className="mt-1 block text-sm text-muted-foreground">Usa {nombre} sin límite de pruebas durante {MES_DIAS} días.</span>

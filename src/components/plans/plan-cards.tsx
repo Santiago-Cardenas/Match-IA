@@ -27,7 +27,7 @@ export function PlanCards({ value, onChange }: { value: PlanId | null; onChange:
               <span className="font-display text-lg font-bold text-white">Pack {id}</span>
               <span className="font-display text-lg font-bold text-[#FF8A6E]">{p.precio}</span>
             </span>
-            <span className="mt-0.5 block text-xs text-[#A9AEC0]">{p.resumen} · pago único</span>
+            <span className="mt-0.5 block text-xs text-[#A9AEC0]">{p.resumen} · pago único por empresa</span>
             <ul className="mt-3 grid gap-1">
               {p.puntos.map((t) => (
                 <li key={t} className="flex items-start gap-2 text-sm text-[#F4F5F8]/90">

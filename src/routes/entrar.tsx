@@ -11,17 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { authErrorMessage, useSession } from "@/lib/auth";
-import { activarSuscripcion } from "@/lib/chat.functions";
+import { activarSuscripcion, invitacionPendiente } from "@/lib/chat.functions";
 import { PLANS, isPlan, type PlanId } from "@/lib/plans";
 import { trackEvent } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
 
-type Modo = "entrar" | "registro";
+/** registro = la empresa compra el pack; afiliado = cuenta de alguien a quien su empresa ya afilió. */
+type Modo = "entrar" | "registro" | "afiliado";
 type Paso = "plan" | "cuenta" | "pago";
 
 export const Route = createFileRoute("/entrar")({
   validateSearch: (s: Record<string, unknown>): { modo?: Modo | undefined; plan?: PlanId | undefined } => ({
-    modo: s["modo"] === "registro" ? "registro" : undefined,
+    modo: s["modo"] === "registro" || s["modo"] === "afiliado" ? s["modo"] : undefined,
     plan: isPlan(s["plan"]) ? s["plan"] : undefined,
   }),
   head: () => ({ meta: [{ title: "Entrar — Matchia" }] }),
@@ -39,14 +40,17 @@ function Entrar() {
   const { modo: initialModo, plan: initialPlan } = Route.useSearch();
   const navigate = useNavigate();
   const activarFn = useServerFn(activarSuscripcion);
+  const invitacionFn = useServerFn(invitacionPendiente);
   const { session, loading } = useSession();
   const [modo, setModo] = useState<Modo>(initialModo ?? (initialPlan ? "registro" : "entrar"));
   const [paso, setPaso] = useState<Paso>(initialPlan ? "cuenta" : "plan");
   const [plan, setPlan] = useState<PlanId | null>(initialPlan ?? null);
   const [nombre, setNombre] = useState("");
+  const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "confirmar">("idle");
+  const [pagado, setPagado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const creating = useRef(false); // mientras se crea la cuenta no se redirige (falta activar el plan)
 
@@ -82,7 +86,7 @@ function Entrar() {
     const { data, error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { nombre: nombre.trim(), plan }, emailRedirectTo: `${window.location.origin}/app` },
+      options: { data: { nombre: nombre.trim(), plan, empresa: empresa.trim() }, emailRedirectTo: `${window.location.origin}/app` },
     });
     if (err) {
       creating.current = false;
@@ -92,12 +96,40 @@ function Entrar() {
     }
     void trackEvent("cuenta_creada", plan);
     if (!data.session) {
-      // Con confirmación de correo activa: el plan queda en los metadatos y se activa al entrar por primera vez.
+      // Con confirmación de correo activa: el plan y la empresa quedan en los metadatos y se activan al entrar por primera vez.
+      setPagado(true);
       setStatus("confirmar");
       return;
     }
-    await activarFn({ data: { token: data.session.access_token, plan } });
+    await activarFn({ data: { token: data.session.access_token, plan, empresa: empresa.trim() } });
     void navigate({ to: "/app" });
+  }
+
+  // Cuenta afiliada: solo si la empresa ya afilió ese correo. Al entrar, el servidor la une a la empresa (sin pago).
+  async function crearAfiliada(e: FormEvent) {
+    e.preventDefault();
+    if (status === "sending") return;
+    setStatus("sending");
+    setError(null);
+    const inv = await invitacionFn({ data: { email: email.trim() } });
+    if (!inv.ok) {
+      setError("Ese correo no tiene una invitación pendiente. Pídele a tu empresa que te afilie desde Matchia o registra tu empresa.");
+      setStatus("idle");
+      return;
+    }
+    const { data, error: err } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { nombre: nombre.trim() }, emailRedirectTo: `${window.location.origin}/app` },
+    });
+    if (err) {
+      setError(authErrorMessage(err.message));
+      setStatus("idle");
+      return;
+    }
+    void trackEvent("cuenta_afiliada_creada");
+    if (!data.session) setStatus("confirmar");
+    // con sesión, el efecto de arriba lleva a /app
   }
 
   const pasoIdx = PASOS.findIndex((p) => p.id === paso);
@@ -114,7 +146,7 @@ function Entrar() {
           <div className="text-center">
             <MailCheck className="mx-auto size-10 text-[#FF6B4A]" aria-hidden />
             <h1 className="mt-4 font-display text-xl font-bold">Revisa tu correo</h1>
-            <p className="mt-2 text-sm text-[#A9AEC0]">Tu pago fue aprobado. Te enviamos un enlace a <strong className="text-white">{email}</strong> para confirmar tu cuenta.</p>
+            <p className="mt-2 text-sm text-[#A9AEC0]">{pagado && "Tu pago fue aprobado. "}Te enviamos un enlace a <strong className="text-white">{email}</strong> para confirmar tu cuenta.</p>
             <Button variant="ghost" className="mt-5 w-full" onClick={() => { setModo("entrar"); setStatus("idle"); }}>Ya la confirmé, iniciar sesión</Button>
           </div>
         ) : (
@@ -125,9 +157,9 @@ function Entrar() {
                   key={m}
                   type="button"
                   role="tab"
-                  aria-selected={modo === m}
+                  aria-selected={modo === m || (m === "registro" && modo === "afiliado")}
                   onClick={() => { setModo(m); setError(null); }}
-                  className={cn("h-9 cursor-pointer rounded-md transition-colors", modo === m ? "bg-[#24355A] text-white shadow-sm" : "text-[#A9AEC0] hover:text-white")}
+                  className={cn("h-9 cursor-pointer rounded-md transition-colors", modo === m || (m === "registro" && modo === "afiliado") ?"bg-[#24355A] text-white shadow-sm" : "text-[#A9AEC0] hover:text-white")}
                 >
                   {m === "entrar" ? "Iniciar sesión" : "Crear cuenta"}
                 </button>
@@ -148,6 +180,31 @@ function Entrar() {
                 <Button type="submit" size="lg" disabled={status === "sending"} className="h-11 rounded-lg bg-[#FF6B4A] font-display text-base font-semibold text-[#14213D] hover:bg-[#FF8466]">
                   {status === "sending" ? <Loader2 className="animate-spin" aria-hidden /> : "Entrar"}
                 </Button>
+                <button type="button" onClick={() => { setModo("afiliado"); setError(null); }} className="text-sm text-[#A9AEC0] underline-offset-4 hover:text-white hover:underline">¿Tu empresa te afilió y aún no tienes cuenta?</button>
+              </form>
+            ) : modo === "afiliado" ? (
+              <form onSubmit={crearAfiliada} className="mt-6 grid gap-4">
+                <div>
+                  <h1 className="font-display text-xl font-bold">Mi empresa me afilió</h1>
+                  <p className="mt-1 text-sm text-[#A9AEC0]">Usa el correo que registró tu empresa. Tu cuenta queda unida a ella, sin pagar nada.</p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="f-nombre">Nombre</Label>
+                  <Input id="f-nombre" required maxLength={100} autoComplete="name" value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputCls} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="f-email">Correo</Label>
+                  <Input id="f-email" type="email" required maxLength={255} autoComplete="email" placeholder="tu@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="f-pass">Contraseña</Label>
+                  <Input id="f-pass" type="password" required minLength={6} maxLength={72} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
+                </div>
+                {error && <p role="alert" className="text-sm text-[#FF8A6E]">{error}</p>}
+                <Button type="submit" size="lg" disabled={status === "sending"} className="h-11 rounded-lg bg-[#FF6B4A] font-display text-base font-semibold text-[#14213D] hover:bg-[#FF8466]">
+                  {status === "sending" ? <Loader2 className="animate-spin" aria-hidden /> : "Crear mi cuenta"}
+                </Button>
+                <button type="button" onClick={() => { setModo("registro"); setError(null); }} className="text-sm text-[#A9AEC0] underline-offset-4 hover:text-white hover:underline">Quiero registrar mi empresa</button>
               </form>
             ) : (
               <div className="mt-6">
@@ -163,19 +220,25 @@ function Entrar() {
 
                 {paso === "plan" && (
                   <>
-                    <h1 className="mb-4 font-display text-xl font-bold">Elige tu plan</h1>
+                    <h1 className="font-display text-xl font-bold">Elige el pack de tu empresa</h1>
+                    <p className="mb-4 mt-1 text-sm text-[#A9AEC0]">La empresa paga una sola vez y afilia las cuentas de su equipo.</p>
                     <PlanCards value={plan} onChange={setPlan} />
                     <Button size="lg" disabled={!plan} onClick={() => setPaso("cuenta")} className="mt-5 h-11 w-full rounded-lg bg-[#FF6B4A] font-display text-base font-semibold text-[#14213D] hover:bg-[#FF8466]">
                       Continuar
                     </Button>
+                    <button type="button" onClick={() => { setModo("afiliado"); setError(null); }} className="mt-4 w-full text-sm text-[#A9AEC0] underline-offset-4 hover:text-white hover:underline">¿Tu empresa ya te afilió? Crea tu cuenta aquí</button>
                   </>
                 )}
 
                 {paso === "cuenta" && (
                   <form onSubmit={cuenta} className="grid gap-4">
-                    <h1 className="font-display text-xl font-bold">Crea tu cuenta</h1>
+                    <h1 className="font-display text-xl font-bold">Tu empresa y tu cuenta</h1>
                     <div className="grid gap-2">
-                      <Label htmlFor="a-nombre">Nombre</Label>
+                      <Label htmlFor="a-empresa">Nombre de la empresa</Label>
+                      <Input id="a-empresa" required minLength={2} maxLength={100} autoComplete="organization" value={empresa} onChange={(e) => setEmpresa(e.target.value)} className={inputCls} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="a-nombre">Tu nombre</Label>
                       <Input id="a-nombre" required maxLength={100} autoComplete="name" value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputCls} />
                     </div>
                     <div className="grid gap-2">
@@ -195,7 +258,7 @@ function Entrar() {
                 {paso === "pago" && plan && (
                   <>
                     <h1 className="mb-4 font-display text-xl font-bold">Pago</h1>
-                    <PaymentForm concepto={`Pack ${plan} · pago único`} precio={PLANS[plan].precio} evento={plan} submitLabel="Pagar y crear mi cuenta" onApproved={crearCuenta} onBack={() => setPaso("cuenta")} />
+                    <PaymentForm concepto={`Pack ${plan} Empresa · pago único`} precio={PLANS[plan].precio} evento={plan} submitLabel="Pagar y crear mi cuenta" onApproved={crearCuenta} onBack={() => setPaso("cuenta")} />
                   </>
                 )}
               </div>

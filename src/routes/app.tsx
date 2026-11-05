@@ -8,6 +8,7 @@ import { AiIcon } from "@/components/ai-icon";
 import { ChatSidebar, type ChatRow, type ProjectRow } from "@/components/chat/chat-sidebar";
 import { Composer, type ComposerHandle } from "@/components/chat/composer";
 import { MessageList } from "@/components/chat/message-list";
+import { ProfileDialog } from "@/components/chat/profile-dialog";
 import { ToolPicker, lockedStatus, type AccessInfo } from "@/components/chat/tool-picker";
 import { UnlockDialog } from "@/components/chat/unlock-dialog";
 import { Onboarding } from "@/components/onboarding";
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { AIS, toAiId, type AiId } from "@/lib/ais";
-import { activarSuscripcion, crearProyecto, editAndResend, getAppInfo, sendChatMessage, type ChatMessage, type Suscripcion } from "@/lib/chat.functions";
+import { activarSuscripcion, crearProyecto, editAndResend, getAppInfo, sendChatMessage, type ChatMessage, type Empresa, type Suscripcion } from "@/lib/chat.functions";
 import { PLANS, isPlan } from "@/lib/plans";
 import { useSession } from "@/lib/auth";
 import { trackEvent } from "@/lib/tracking";
@@ -40,6 +41,7 @@ function AppPage() {
   const infoFn = useServerFn(getAppInfo);
   const activarFn = useServerFn(activarSuscripcion);
   const [sub, setSub] = useState<Suscripcion | null | undefined>(undefined); // undefined = cargando
+  const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [restantes, setRestantes] = useState<{ texto: number; imagen: number } | null>(null);
   const [access, setAccess] = useState<AccessInfo>({ pruebas: {}, accesos: {}, tokens: 0 });
 
@@ -64,30 +66,39 @@ function AppPage() {
     return res;
   }, [infoFn, token]);
 
-  // Plan. Si pagó al registrarse pero el plan no se activó (p. ej. confirmó el correo después), se activa aquí.
+  // Empresa y plan. Una cuenta afiliada queda unida a su empresa en getAppInfo. Si la empresa pagó al registrarse
+  // pero no se activó (p. ej. confirmó el correo después), se activa aquí con los datos guardados en el registro.
   useEffect(() => {
     if (!session) return;
     void (async () => {
       const res = await refresh();
       if (!res) return setSub(null);
-      const pagado = session.user.user_metadata?.["plan"];
-      if (!res.suscripcion && isPlan(pagado)) {
-        const a = await activarFn({ data: { token: await token(), plan: pagado } });
+      const meta = session.user.user_metadata ?? {};
+      const pagado = meta["plan"];
+      if (!res.empresa && isPlan(pagado)) {
+        const nombre = String(meta["empresa"] ?? "").trim() || `Empresa de ${String(meta["nombre"] ?? "").trim() || session.user.email?.split("@")[0]}`;
+        const a = await activarFn({ data: { token: await token(), plan: pagado, empresa: nombre.slice(0, 100) } });
+        setEmpresa(a.ok ? a.empresa : null);
         return setSub(a.ok ? a.suscripcion : null);
       }
+      setEmpresa(res.empresa);
       setSub(res.suscripcion);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id]);
 
   if (!session || sub === undefined) return <Loading />;
-  if (!sub || !sub.ias.length) return <Onboarding token={token} suscripcion={sub} onDone={(s) => { setSub(s); void refresh(); }} />;
-  return <ChatApp session={session} sub={sub} token={token} restantes={restantes} setRestantes={setRestantes} access={access} refresh={refresh} />;
+  if (!sub || !empresa || !sub.ias.length || (empresa.rol === "admin" && !empresa.testHecho)) {
+    return <Onboarding token={token} suscripcion={sub} empresa={empresa} onDone={(s, e) => { setSub(s); setEmpresa(e); void refresh(); }} />;
+  }
+  return <ChatApp session={session} sub={sub} empresa={empresa} setEmpresa={setEmpresa} token={token} restantes={restantes} setRestantes={setRestantes} access={access} refresh={refresh} />;
 }
 
-function ChatApp({ session, sub, token, restantes, setRestantes, access, refresh }: {
+function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setRestantes, access, refresh }: {
   session: Session;
   sub: Suscripcion;
+  empresa: Empresa;
+  setEmpresa: (e: Empresa) => void;
   token: () => Promise<string>;
   restantes: { texto: number; imagen: number } | null;
   setRestantes: React.Dispatch<React.SetStateAction<{ texto: number; imagen: number } | null>>;
@@ -111,6 +122,7 @@ function ChatApp({ session, sub, token, restantes, setRestantes, access, refresh
   const [pending, setPending] = useState<{ herramienta: AiId } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [toDelete, setToDelete] = useState<{ kind: "chat" | "proyecto"; id: string; nombre: string } | null>(null);
 
   const user = session.user;
@@ -323,6 +335,7 @@ function ChatApp({ session, sub, token, restantes, setRestantes, access, refresh
       projects={projects}
       activeId={chatId}
       plan={sub.plan}
+      empresa={empresa.nombre}
       tokens={access.tokens}
       userName={userName}
       userEmail={user.email ?? ""}
@@ -334,6 +347,7 @@ function ChatApp({ session, sub, token, restantes, setRestantes, access, refresh
       onRenameProject={renameProject}
       onDeleteProject={(id) => setToDelete({ kind: "proyecto", id, nombre: projects.find((p) => p.id === id)?.nombre ?? "" })}
       onRemoveFromProject={removeFromProject}
+      onProfile={() => { setMenuOpen(false); setProfileOpen(true); }}
       onLogout={() => void supabase.auth.signOut()}
       onClose={onClose}
     />
@@ -404,6 +418,7 @@ function ChatApp({ session, sub, token, restantes, setRestantes, access, refresh
         )}
       </main>
 
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} token={token} empresa={empresa} ias={sub.ias} userName={userName} userEmail={user.email ?? ""} onEmpresa={setEmpresa} />
       {locked && <UnlockDialog ai={tool} open={unlockOpen} onOpenChange={setUnlockOpen} token={token} tokens={access.tokens} onBought={() => void refresh()} />}
 
       <Dialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>

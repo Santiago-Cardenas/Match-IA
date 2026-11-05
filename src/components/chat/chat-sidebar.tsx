@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Check, ChevronRight, Folder, FolderMinus, FolderOpen, FolderPlus, Loader2, LogOut, Pencil, Search, SquarePen, Trash2, X } from "lucide-react";
+import { Building2, Check, ChevronRight, Folder, FolderMinus, FolderOpen, FolderPlus, Loader2, LogOut, Pencil, Search, SquarePen, Trash2, X } from "lucide-react";
 
 import { AiIcon } from "@/components/ai-icon";
 import { BrandLogo } from "@/components/brand-logo";
@@ -69,6 +69,7 @@ export function ChatSidebar(props: {
   projects: ProjectRow[];
   activeId: string | undefined;
   plan: string;
+  empresa: string;
   tokens: number;
   userName: string;
   userEmail: string;
@@ -80,6 +81,7 @@ export function ChatSidebar(props: {
   onRenameProject: (id: string, nombre: string) => void;
   onDeleteProject: (id: string) => void;
   onRemoveFromProject: (chatId: string) => void;
+  onProfile: () => void;
   onLogout: () => void;
   onClose?: (() => void) | undefined;
 }) {
@@ -260,15 +262,18 @@ export function ChatSidebar(props: {
         ))}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-border px-3 py-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary font-display text-sm font-bold text-primary-foreground" aria-hidden>{initials}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{props.userName || props.userEmail}</span>
-          <span className="mt-0.5 flex flex-wrap gap-1">
-            <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">Pack {props.plan}</span>
-            {props.tokens > 0 && <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{formatTokens(props.tokens)} tokens</span>}
+      <div className="flex items-center gap-1 border-t border-border px-2 py-2">
+        <button type="button" onClick={props.onProfile} title="Perfil y empresa" className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-secondary">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary font-display text-sm font-bold text-primary-foreground" aria-hidden>{initials}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{props.userName || props.userEmail}</span>
+            <span className="flex items-center gap-1 truncate text-xs text-muted-foreground"><Building2 className="size-3 shrink-0" aria-hidden /> <span className="truncate">{props.empresa}</span></span>
+            <span className="mt-0.5 flex flex-wrap gap-1">
+              <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">Pack {props.plan}</span>
+              {props.tokens > 0 && <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{formatTokens(props.tokens)} tokens</span>}
+            </span>
           </span>
-        </span>
+        </button>
         <button type="button" onClick={props.onLogout} aria-label="Cerrar sesión" title="Cerrar sesión" className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground">
           <LogOut className="size-4" aria-hidden />
         </button>
