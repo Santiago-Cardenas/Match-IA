@@ -42,9 +42,9 @@ Mientras el PC esté apagado o el servidor cerrado, la app muestra "Hay mucha de
   o pierde el túnel, lo reabre. La app reintenta hasta 3 veces (esperando 20 s) mientras el servidor vuelve.
 - Arranque automático al iniciar sesión en Windows (una sola vez):
   ```powershell
-  .	ools\qwen-image-server\instalar-inicio.ps1 -Token "tu-clave" -Dominio "tu-dominio.ngrok-free.dev"
+  .\tools\qwen-image-server\instalar-inicio.ps1 -Token "tu-clave" -Dominio "tu-dominio.ngrok-free.dev"
   ```
-  Para quitarlo: `.	ools\qwen-image-server\instalar-inicio.ps1 -Quitar`.
+  Para quitarlo: `.\tools\qwen-image-server\instalar-inicio.ps1 -Quitar`.
 - Antes de presentar: deja el PC encendido y con la sesión iniciada (bloquearlo está bien, cerrar sesión no),
   pausa Windows Update para que no reinicie, y no cierres la ventana "Matchia - imagenes".
 
