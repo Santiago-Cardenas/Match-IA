@@ -36,6 +36,19 @@ $py = "$env:USERPROFILE\matchia-qwen\.venv\Scripts\python.exe"
    ```
 Mientras el PC esté apagado o el servidor cerrado, la app muestra "Hay mucha demanda en este momento" al pedir imágenes.
 
+## Funcionamiento sin intervención (presentaciones)
+- `start.ps1` vigila todo: si el servidor se cierra (p. ej. un error nativo de PyTorch, como el `0xc0000005` en `c10.dll`
+  visto el 4 de noviembre), deja de responder o la GPU queda en mal estado, lo reinicia solo (~30 s); si ngrok se cierra
+  o pierde el túnel, lo reabre. La app reintenta hasta 3 veces (esperando 20 s) mientras el servidor vuelve.
+- Arranque automático al iniciar sesión en Windows (una sola vez):
+  ```powershell
+  .	ools\qwen-image-server\instalar-inicio.ps1 -Token "tu-clave" -Dominio "tu-dominio.ngrok-free.dev"
+  ```
+  Para quitarlo: `.	ools\qwen-image-server\instalar-inicio.ps1 -Quitar`.
+- Antes de presentar: deja el PC encendido y con la sesión iniciada (bloquearlo está bien, cerrar sesión no),
+  pausa Windows Update para que no reinicie, y no cierres la ventana "Matchia - imagenes".
+
+
 ## Alternativa en la nube (sin tu PC)
 ModelScope ofrece Qwen-Image 2.1 gratis con cupo diario. Necesita una cuenta de ModelScope vinculada a Alibaba Cloud
 (con verificación de identidad) y un token. En Render: `MODELSCOPE_TOKEN=...` (y no pongas `QWEN_IMAGE_URL`).

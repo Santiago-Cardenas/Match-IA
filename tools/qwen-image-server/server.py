@@ -77,8 +77,20 @@ class GenerateRequest(BaseModel):
     seed: int | None = None
 
 
+def restart_soon(reason: str):
+    """Cierra el proceso en 1 s para que start.ps1 lo vuelva a abrir con la GPU limpia."""
+    print(f"Error de GPU ({reason}); el servidor se reinicia solo.", flush=True)
+    threading.Timer(1.0, lambda: os._exit(3)).start()
+
+
 @app.get("/health")
 def health():
+    # Una operación mínima en la GPU: si CUDA quedó en mal estado, el vigilante reinicia el servidor.
+    try:
+        torch.zeros(1, device="cuda").add_(1).item()
+    except Exception as e:  # noqa: BLE001
+        restart_soon(str(e)[:120])
+        raise HTTPException(status_code=503, detail="GPU no disponible, reiniciando") from e
     return {"ok": True, "model": MODEL, "quant": QUANT, "steps": STEPS, "size": SIZE, "gpu": torch.cuda.get_device_name(0)}
 
 
@@ -89,14 +101,24 @@ def generate(req: GenerateRequest, authorization: str | None = Header(default=No
     start = time.time()
     seed = req.seed if req.seed is not None else int(time.time())
     with lock:
-        torch.cuda.empty_cache()
-        image = pipe(
-            prompt=req.prompt,
-            width=req.width or SIZE,
-            height=req.height or SIZE,
-            num_inference_steps=req.steps or STEPS,
-            generator=torch.Generator("cpu").manual_seed(seed),
-        ).images[0]
+        try:
+            torch.cuda.empty_cache()
+            image = pipe(
+                prompt=req.prompt,
+                width=req.width or SIZE,
+                height=req.height or SIZE,
+                num_inference_steps=req.steps or STEPS,
+                generator=torch.Generator("cpu").manual_seed(seed),
+            ).images[0]
+        except torch.cuda.OutOfMemoryError as e:
+            torch.cuda.empty_cache()
+            raise HTTPException(status_code=503, detail="Sin memoria de GPU, intenta de nuevo") from e
+        except RuntimeError as e:
+            # Errores de CUDA dejan la GPU inutilizable en este proceso: mejor reiniciar.
+            if "cuda" in str(e).lower() or "cublas" in str(e).lower():
+                restart_soon(str(e)[:120])
+                raise HTTPException(status_code=503, detail="Error de GPU, reiniciando") from e
+            raise
     buf = io.BytesIO()
     image.convert("RGB").save(buf, format="JPEG", quality=90)
     seconds = round(time.time() - start, 1)

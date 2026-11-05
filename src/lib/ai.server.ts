@@ -114,23 +114,39 @@ export async function generateImage(message: string, history: Turn[] = [], tool:
 type RawImage = { ok: true; bytes: Uint8Array; mime: string } | { ok: false; busy: boolean };
 
 // Servidor propio (tools/qwen-image-server): POST /generate { prompt } -> { image: base64, mime }.
+// Si el servidor está caído o reiniciándose (start.ps1 lo vuelve a abrir solo en ~30 s), se espera y se reintenta.
+const QWEN_RETRY_STATUS = [502, 503, 504];
+const QWEN_ATTEMPTS = 3;
+const QWEN_RETRY_WAIT_MS = 20_000;
+
 async function viaLocalQwen(prompt: string): Promise<RawImage> {
   // Acepta la URL con o sin https:// y con o sin "/" al final.
   const raw = env("QWEN_IMAGE_URL").trim().replace(/\/+$/, "");
   const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-  const res = await fetch(`${url}/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${env("QWEN_IMAGE_TOKEN")}`, "ngrok-skip-browser-warning": "1" },
-    body: JSON.stringify({ prompt }),
-    signal: AbortSignal.timeout(240_000),
-  });
-  if (!res.ok) {
-    console.error("Qwen local error", res.status, await res.text());
-    return { ok: false, busy: true };
+  for (let attempt = 1; attempt <= QWEN_ATTEMPTS; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${url}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${env("QWEN_IMAGE_TOKEN")}`, "ngrok-skip-browser-warning": "1" },
+        body: JSON.stringify({ prompt }),
+        signal: AbortSignal.timeout(180_000),
+      });
+    } catch (e) {
+      console.error(`Qwen local sin respuesta (intento ${attempt}/${QWEN_ATTEMPTS})`, e);
+      if (attempt < QWEN_ATTEMPTS) await sleep(QWEN_RETRY_WAIT_MS);
+      continue;
+    }
+    if (res.ok) {
+      const json = (await res.json()) as { image?: string; mime?: string };
+      if (!json.image) return { ok: false, busy: false };
+      return { ok: true, bytes: Uint8Array.from(Buffer.from(json.image, "base64")), mime: json.mime || "image/jpeg" };
+    }
+    console.error(`Qwen local error (intento ${attempt}/${QWEN_ATTEMPTS})`, res.status, (await res.text()).slice(0, 300));
+    if (!QWEN_RETRY_STATUS.includes(res.status)) return { ok: false, busy: true };
+    if (attempt < QWEN_ATTEMPTS) await sleep(QWEN_RETRY_WAIT_MS);
   }
-  const json = (await res.json()) as { image?: string; mime?: string };
-  if (!json.image) return { ok: false, busy: false };
-  return { ok: true, bytes: Uint8Array.from(Buffer.from(json.image, "base64")), mime: json.mime || "image/jpeg" };
+  return { ok: false, busy: true };
 }
 
 // ModelScope API-Inference (gratis con cupo diario). Tarea asíncrona: se crea y se consulta hasta que termine.
