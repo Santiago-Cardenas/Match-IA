@@ -14,7 +14,7 @@ Render no tiene GPU, así que el modelo **no puede correr allá**.
 ```powershell
 python -m venv $env:USERPROFILE\matchia-qwen\.venv
 $py = "$env:USERPROFILE\matchia-qwen\.venv\Scripts\python.exe"
-& $py -m pip install torch --index-url https://download.pytorch.org/whl/cu128
+& $py -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 & $py -m pip install -r tools\qwen-image-server\requirements.txt
 & "$env:USERPROFILE\matchia-qwen\.venv\Scripts\hf.exe" download Qwen/Qwen-Image-2.1   # ~33 GB
 ```

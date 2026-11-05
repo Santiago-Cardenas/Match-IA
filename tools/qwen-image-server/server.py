@@ -55,6 +55,10 @@ else:
             print(f"Modelo cuantizado guardado en {NF4_DIR} (las próximas cargas serán más rápidas)", flush=True)
         except Exception as e:  # no es grave: solo se pierde la carga rápida
             print(f"No se pudo guardar el modelo cuantizado: {e}", flush=True)
+# El VAE decodifica en float32: por bloques evita quedarse sin VRAM en 1024 px con GPUs de 12 GB.
+for method in ("enable_tiling", "enable_slicing"):
+    if hasattr(pipe.vae, method):
+        getattr(pipe.vae, method)()
 if OFFLOAD:
     pipe.enable_model_cpu_offload()
 else:
@@ -85,6 +89,7 @@ def generate(req: GenerateRequest, authorization: str | None = Header(default=No
     start = time.time()
     seed = req.seed if req.seed is not None else int(time.time())
     with lock:
+        torch.cuda.empty_cache()
         image = pipe(
             prompt=req.prompt,
             width=req.width or SIZE,

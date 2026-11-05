@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { API_BUSY, DEMO_UNAVAILABLE, LIMITS, MAX_DEMO_PROMPTS, MAX_INPUT_CHARS, TOOLS, type Cat } from "./demo-config";
+import { API_BUSY, DEMO_UNAVAILABLE, LIMITS, MAX_DEMO_PROMPTS, MAX_INPUT_CHARS, TOOLS, identityRule, type Cat } from "./demo-config";
 
 type Result = { ok: true; text?: string; image?: string } | { ok: false; reason: "agotada" | "error"; message: string };
 
@@ -47,7 +47,7 @@ export const runTextDemo = createServerFn({ method: "POST" })
       const commit = await checkQuota(data.email, "text", data.categoria);
       if (!commit) return unavailable("agotada");
       const { generateText } = await import("./ai.server");
-      const res = await generateText(tool.promptSistema, data.messages, tool.modelo!, 400);
+      const res = await generateText(tool.promptSistema + identityRule(tool.nombre), data.messages, { model: tool.modelo!, maxOutputTokens: 400 });
       if (!res.ok) return res.busy ? apiBusy() : unavailable("error");
       await commit();
       return { ok: true, text: res.text };
@@ -71,6 +71,7 @@ export const runImageDemo = createServerFn({ method: "POST" })
         if (res.blocked) return { ok: false, reason: "error", message: "No podemos generar esa imagen. Prueba con otra descripción." };
         return res.busy ? apiBusy() : unavailable("error");
       }
+      if (res.kind === "texto") return { ok: true, text: res.text }; // pregunta o saludo: no gasta el cupo de imagen
       await commit();
       return { ok: true, image: `data:${res.mime};base64,${Buffer.from(res.bytes).toString("base64")}` };
     } catch (e) {

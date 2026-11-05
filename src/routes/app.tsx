@@ -154,9 +154,8 @@ function ChatApp({ session }: { session: Session }) {
         return;
       }
       setMessages((m) => [...m.filter((x) => x.id !== temp.id), res.user, res.reply]);
-      if (res.reply.tipo !== "aviso") {
-        setRestantes((r) => r && { ...r, [herramienta === "Imagen" ? "imagen" : "texto"]: Math.max(0, r[herramienta === "Imagen" ? "imagen" : "texto"] - 1) });
-      }
+      const used = res.reply.tipo === "imagen" ? "imagen" : res.reply.tipo === "texto" ? "texto" : null;
+      if (used) setRestantes((r) => r && { ...r, [used]: Math.max(0, r[used] - 1) });
       setChats((cs) => [{ id: res.chatId, titulo: res.titulo, herramienta, updated_at: new Date().toISOString() }, ...cs.filter((c) => c.id !== res.chatId)]);
       if (!origin) {
         skipLoad.current = res.chatId;

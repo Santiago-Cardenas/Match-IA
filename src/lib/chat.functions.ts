@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { APP_LIMITS, APP_MESSAGES, APP_PROMPTS, HISTORY_TURNS, MAX_MESSAGE_CHARS } from "./app-config";
-import { TOOLS, type Cat } from "./demo-config";
+import { TOOLS, identityRule, type Cat } from "./demo-config";
 
 const CATS = ["Escritura", "Video", "Imagen", "Código", "Productividad"] as const;
 
@@ -105,8 +105,22 @@ async function answer(db: Db, userId: string, chatId: string, cat: Cat, modelo: 
   if (cat === "Imagen") {
     const [mine, all] = await Promise.all([usage(db, "imagen", userId), usage(db, "imagen")]);
     if (mine >= APP_LIMITS.imagenPorUsuario || all >= APP_LIMITS.imagenGlobal) return aviso(APP_MESSAGES.limiteImagen);
-    const img = await ai.generateImage(texto);
+    // Contexto para el filtro: mensajes recientes y los prompts de las imágenes anteriores (permite "hazlo más azul").
+    const { data: recent } = await db
+      .from("messages")
+      .select("role, tipo, contenido")
+      .eq("chat_id", chatId)
+      .neq("tipo", "aviso")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    const history = (recent ?? [])
+      .reverse()
+      .slice(0, -1) // el último es el mensaje actual
+      .map((r) => ({ role: r.role as "user" | "model", text: r.tipo === "imagen" ? `[Imagen generada con el prompt: ${r.contenido}]` : r.contenido }));
+    while (history.length && history[0]!.role !== "user") history.shift();
+    const img = await ai.generateImage(texto, history);
     if (!img.ok) return aviso(img.blocked ? APP_MESSAGES.bloqueado : img.busy ? APP_MESSAGES.ocupado : APP_MESSAGES.error);
+    if (img.kind === "texto") return { tipo: "texto", contenido: img.text };
     const ext = img.mime.includes("png") ? "png" : img.mime.includes("webp") ? "webp" : "jpg";
     const path = `${userId}/${crypto.randomUUID()}.${ext}`;
     const { error } = await db.storage.from("chat-images").upload(path, img.bytes, { contentType: img.mime });
@@ -114,7 +128,8 @@ async function answer(db: Db, userId: string, chatId: string, cat: Cat, modelo: 
       console.error("No se pudo guardar la imagen", error);
       return aviso(APP_MESSAGES.error);
     }
-    return { tipo: "imagen", contenido: "", imagen_url: db.storage.from("chat-images").getPublicUrl(path).data.publicUrl };
+    // contenido = prompt final (no se muestra; sirve de contexto para cambios posteriores)
+    return { tipo: "imagen", contenido: img.prompt, imagen_url: db.storage.from("chat-images").getPublicUrl(path).data.publicUrl };
   }
 
   const [mine, all] = await Promise.all([usage(db, "texto", userId), usage(db, "texto")]);
@@ -129,7 +144,10 @@ async function answer(db: Db, userId: string, chatId: string, cat: Cat, modelo: 
     .limit(HISTORY_TURNS);
   const turns = (rows ?? []).reverse().map((r) => ({ role: r.role as "user" | "model", text: r.contenido }));
   while (turns.length && turns[0]!.role !== "user") turns.shift(); // Gemini exige empezar con el usuario
-  const res = await ai.generateText(APP_PROMPTS[cat], turns.length ? turns : [{ role: "user", text: texto }], modelo ?? undefined, 1500);
+  const res = await ai.generateText(APP_PROMPTS[cat] + identityRule(TOOLS[cat].nombre), turns.length ? turns : [{ role: "user", text: texto }], {
+    model: modelo ?? undefined,
+    maxOutputTokens: 1500,
+  });
   if (!res.ok) return aviso(res.busy ? APP_MESSAGES.ocupado : APP_MESSAGES.error);
   return { tipo: "texto", contenido: res.text };
 }

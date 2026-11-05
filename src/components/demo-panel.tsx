@@ -35,7 +35,8 @@ export function DemoPanel({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [image, setImage] = useState<string | null>(null);
 
-  const maxPrompts = tool.demo === "imagen" ? 1 : MAX_DEMO_PROMPTS;
+  // Imagen: hasta 3 mensajes (una pregunta no gasta la imagen); termina al generar una.
+  const maxPrompts = tool.demo === "imagen" ? 3 : MAX_DEMO_PROMPTS;
   const userCount = messages.filter((m) => m.role === "user").length;
   const done = image !== null || (userCount >= maxPrompts && !loading && messages.at(-1)?.role === "model");
 
@@ -99,7 +100,7 @@ export function DemoPanel({
         <DisclosureButton variant="inline" />
       </div>
       <DialogDescription className="mt-1 text-sm text-muted-foreground">
-        {tool.descripcion} · {maxPrompts === 1 ? "1 prompt" : `hasta ${maxPrompts} prompts`}
+        {tool.descripcion} · {tool.demo === "imagen" ? "1 imagen" : `hasta ${maxPrompts} prompts`}
       </DialogDescription>
 
       <div className="mt-5 grid gap-3">

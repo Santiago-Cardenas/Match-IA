@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 // Mientras no estén, se dibuja el logo del manual de identidad con SVG y texto (el build no falla).
 const files = import.meta.glob<string>("../assets/{logo,logoNombre}.{png,svg,webp,jpg,jpeg}", { eager: true, import: "default" });
 const asset = (name: string) => Object.entries(files).find(([path]) => path.split("/").pop()!.split(".")[0] === name)?.[1];
-const LOGO = asset("logo");
+export const LOGO = asset("logo");
 const LOGO_NOMBRE = asset("logoNombre");
 
 /** Isotipo: rectángulo base (blanco sobre fondo oscuro, navy sobre claro) y rectángulo coral superpuesto. */

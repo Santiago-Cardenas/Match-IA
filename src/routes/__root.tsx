@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { LOGO } from "@/components/brand-logo";
 import { DisclosureButton } from "@/components/disclosure";
 import appCss from "../styles.css?url";
 
@@ -90,7 +91,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      LOGO ? { rel: "icon", href: LOGO, type: "image/png" } : { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,
