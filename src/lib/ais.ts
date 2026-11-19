@@ -171,6 +171,43 @@ export function toAiId(value: string | null | undefined): AiId | null {
   return LEGACY[value] ?? null;
 }
 
+// Mix: una IA de texto escribe la respuesta y le pasa a una IA de imagen el prompt de la imagen acompañante.
+// Se guarda como herramienta "jasper+midjourney".
+export type Mix = { texto: AiId; imagen: AiId };
+export const MIX_DEFAULT: Mix = { texto: "jasper", imagen: "midjourney" };
+export const TEXT_AIS = AI_ORDER.filter((id) => AIS[id].tipo === "texto");
+export const IMAGE_AIS = AI_ORDER.filter((id) => AIS[id].tipo === "imagen");
+export const mixKey = (m: Mix) => `${m.texto}+${m.imagen}`;
+
+export function toMix(value: string | null | undefined): Mix | null {
+  const [texto, imagen, ...rest] = (value ?? "").split("+");
+  if (rest.length || !texto || !imagen || !(texto in AIS) || !(imagen in AIS)) return null;
+  if (AIS[texto as AiId].tipo !== "texto" || AIS[imagen as AiId].tipo !== "imagen") return null;
+  return { texto: texto as AiId, imagen: imagen as AiId };
+}
+
+/** Herramienta válida para el chat: una IA del catálogo o un Mix. */
+export function toTool(value: string | null | undefined): string | null {
+  const id = toAiId(value);
+  if (id) return id;
+  const mix = toMix(value);
+  return mix ? mixKey(mix) : null;
+}
+
+/** IAs que participan en una herramienta guardada ("jasper" → [jasper]; "jasper+midjourney" → [jasper, midjourney]). */
+export function aiIdsOf(value: string | null | undefined): AiId[] {
+  const mix = toMix(value);
+  if (mix) return [mix.texto, mix.imagen];
+  const id = toAiId(value);
+  return id ? [id] : [];
+}
+
+export const toolName = (value: string | null | undefined) => aiIdsOf(value).map((id) => AIS[id].nombre).join(" + ") || "Matchia";
+
+/** Instrucciones extra para la IA de texto en un Mix: entrega su texto y el prompt de la imagen en JSON. */
+export const mixRule = (imagen: Ai) =>
+  ` En esta respuesta trabajas en equipo con ${imagen.nombre} (${imagen.proposito}), que creará la imagen que acompaña tu texto. Responde SOLO con JSON: {"texto":"...","imagen":"..."}. "texto": tu respuesta completa en Markdown, lista para usar (por ejemplo, el texto de la publicación con su llamado a la acción y hashtags si aplica); no menciones el JSON ni a ${imagen.nombre}. "imagen": el prompt para ${imagen.nombre}, en español, de 30 a 80 palabras: describe la imagen acompañante (sujeto, composición, estilo, colores y luz) de forma coherente con tu texto; si la imagen debe llevar texto escrito, inclúyelo literal entre comillas.`;
+
 /**
  * Identidad: la IA que responde (Gemini o Qwen) se presenta como la herramienta seleccionada.
  * La aclaración de que es una simulación está en el botón de información.

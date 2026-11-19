@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Loader2, Lock, Menu, SquarePen } from "lucide-react";
+import { Layers, Loader2, Lock, Menu, SquarePen } from "lucide-react";
 
 import { AiIcon } from "@/components/ai-icon";
 import { ChatSidebar, type ChatRow, type ProjectRow } from "@/components/chat/chat-sidebar";
@@ -15,8 +15,8 @@ import { Onboarding } from "@/components/onboarding";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { AIS, toAiId, type AiId } from "@/lib/ais";
-import { activarSuscripcion, crearProyecto, editAndResend, getAppInfo, sendChatMessage, type ChatMessage, type Empresa, type Suscripcion } from "@/lib/chat.functions";
+import { AIS, MIX_DEFAULT, aiIdsOf, mixKey, toMix, toTool, type AiId } from "@/lib/ais";
+import { activarSuscripcion, crearProyecto, editAndResend, getAppInfo, sendChatMessage, votarRespuesta, type ChatMessage, type Empresa, type Suscripcion } from "@/lib/chat.functions";
 import { PLANS, isPlan } from "@/lib/plans";
 import { useSession } from "@/lib/auth";
 import { trackEvent } from "@/lib/tracking";
@@ -110,6 +110,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
   const sendFn = useServerFn(sendChatMessage);
   const editFn = useServerFn(editAndResend);
   const projectFn = useServerFn(crearProyecto);
+  const voteFn = useServerFn(votarRespuesta);
   const composer = useRef<ComposerHandle>(null);
   const activeChat = useRef<string | undefined>(chatId);
   const skipLoad = useRef<string | null>(null);
@@ -118,10 +119,12 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingChat, setLoadingChat] = useState(false);
-  const [tool, setTool] = useState<AiId>(sub.ias[0]!);
-  const [pending, setPending] = useState<{ herramienta: AiId } | null>(null);
+  const [tool, setTool] = useState<string>(sub.ias[0]!); // una IA o un Mix ("jasper+midjourney")
+  const [pending, setPending] = useState<{ herramienta: string } | null>(null);
+  const [animateId, setAnimateId] = useState<string | null>(null); // respuesta nueva que se muestra escribiéndose
   const [menuOpen, setMenuOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
+  const [unlockAi, setUnlockAi] = useState<AiId | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [toDelete, setToDelete] = useState<{ kind: "chat" | "proyecto"; id: string; nombre: string } | null>(null);
 
@@ -129,6 +132,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
   const userName = String(user.user_metadata?.["nombre"] ?? "").trim();
   const firstName = userName.split(" ")[0];
   const included = (id: AiId | null): id is AiId => !!id && sub.ias.includes(id);
+  const allIncluded = (herramienta: string) => aiIdsOf(herramienta).every(included);
 
   const loadLists = useCallback(async () => {
     const [{ data: c }, { data: p }] = await Promise.all([
@@ -154,6 +158,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
       skipLoad.current = null;
       return;
     }
+    setAnimateId(null);
     let cancelled = false;
     setLoadingChat(true);
     void (async () => {
@@ -167,8 +172,8 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
         return;
       }
       setMessages((rows ?? []) as ChatMessage[]);
-      const id = toAiId(chat.herramienta);
-      if (id) setTool(id);
+      const t = toTool(chat.herramienta);
+      if (t) setTool(t);
       setLoadingChat(false);
     })();
     return () => {
@@ -184,8 +189,15 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
   }
 
   function countUse(reply: ChatMessage) {
-    const used = reply.tipo === "imagen" ? "imagen" : reply.tipo === "texto" ? "texto" : null;
-    if (used) setRestantes((r) => r && { ...r, [used]: Math.max(0, r[used] - 1) });
+    const texto = reply.tipo === "texto" || reply.tipo === "mix";
+    const imagen = reply.tipo === "imagen" || (reply.tipo === "mix" && !!reply.imagen_url);
+    setRestantes((r) => r && { texto: Math.max(0, r.texto - (texto ? 1 : 0)), imagen: Math.max(0, r.imagen - (imagen ? 1 : 0)) });
+  }
+
+  function blocked(ai: AiId | undefined) {
+    if (!ai) return;
+    setUnlockAi(ai);
+    setUnlockOpen(true);
   }
 
   const localAviso = (contenido: string): ChatMessage => ({
@@ -202,14 +214,15 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
     void trackEvent("app_mensaje", herramienta);
     try {
       const res = await sendFn({ data: { token: await token(), chatId: origin ?? null, herramienta, texto: text } });
-      if (!included(herramienta)) void refresh(); // pruebas y tokens de IAs fuera del plan
+      if (!allIncluded(herramienta)) void refresh(); // pruebas y tokens de IAs fuera del plan
       if (activeChat.current !== origin) return void loadLists(); // el usuario cambió de chat mientras esperaba
       if (!res.ok) {
         setMessages((m) => [...m.filter((x) => !(res.bloqueada && x.id === temp.id)), localAviso(res.message)]);
-        if (res.bloqueada) setUnlockOpen(true);
+        blocked(res.bloqueada);
         return;
       }
       setMessages((m) => [...m.filter((x) => x.id !== temp.id), res.user, res.reply]);
+      setAnimateId(res.reply.id);
       countUse(res.reply);
       setChats((cs) => {
         const prev = cs.find((c) => c.id === res.chatId);
@@ -240,20 +253,30 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
     void trackEvent("app_mensaje_editado", herramienta);
     try {
       const res = await editFn({ data: { token: await token(), messageId, herramienta, texto: text } });
-      if (!included(herramienta)) void refresh();
+      if (!allIncluded(herramienta)) void refresh();
       if (activeChat.current !== origin) return;
       if (!res.ok) {
         setMessages((m) => [...m, localAviso(res.message)]);
-        if (res.bloqueada) setUnlockOpen(true);
+        blocked(res.bloqueada);
         return;
       }
       setMessages((m) => [...m.filter((x) => x.id !== messageId), res.user, res.reply]);
+      setAnimateId(res.reply.id);
       countUse(res.reply);
     } catch {
       setMessages((m) => [...m, localAviso("No pudimos reenviar tu mensaje. Intenta de nuevo.")]);
     } finally {
       setPending(null);
     }
+  }
+
+  // Pulgar arriba o abajo: ajusta "Tu match" en el perfil.
+  async function vote(id: string, voto: -1 | 0 | 1) {
+    const prev = messages.find((x) => x.id === id)?.voto ?? null;
+    setMessages((m) => m.map((x) => (x.id === id ? { ...x, voto: voto || null } : x)));
+    const res = await voteFn({ data: { token: await token(), messageId: id, voto } });
+    if (!res.ok) setMessages((m) => m.map((x) => (x.id === id ? { ...x, voto: prev } : x)));
+    else if (voto) void trackEvent(voto > 0 ? "voto_arriba" : "voto_abajo", aiIdsOf(messages.find((x) => x.id === id)?.herramienta).join("+"));
   }
 
   async function renameChat(id: string, titulo: string) {
@@ -272,6 +295,12 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
   async function renameProject(id: string, nombre: string) {
     setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, nombre } : p)));
     await supabase.from("projects").update({ nombre }).eq("id", id);
+  }
+
+  // Agrega chats a un proyecto existente (si estaban en otro, se mueven).
+  async function addToProject(projectId: string, ids: string[]) {
+    setChats((cs) => cs.map((c) => (ids.includes(c.id) ? { ...c, project_id: projectId } : c)));
+    await supabase.from("chats").update({ project_id: projectId }).in("id", ids);
   }
 
   async function removeFromProject(chatIdToRemove: string) {
@@ -299,31 +328,48 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
     composer.current?.fill(AIS[id].ejemplo);
   }
 
+  // Mix sugerido: la IA de texto del plan (o Jasper) con la IA de imagen del plan (o Midjourney).
+  const sugerido = {
+    texto: sub.ias.find((id) => AIS[id].tipo === "texto") ?? MIX_DEFAULT.texto,
+    imagen: sub.ias.find((id) => AIS[id].tipo === "imagen") ?? MIX_DEFAULT.imagen,
+  };
+  function chooseMix() {
+    setTool(mixKey(sugerido));
+    composer.current?.fill("Crea una publicación de Instagram para ");
+  }
+
   const empty = !chatId && messages.length === 0;
-  const isImage = AIS[tool].tipo === "imagen";
-  const locked = !included(tool);
-  const status = locked ? lockedStatus(tool, access) : null;
-  const placeholder = status && !status.usable ? `Desbloquea ${AIS[tool].nombre} para seguir usándola` : AIS[tool].placeholder;
+  const mix = toMix(tool);
+  const isImage = !mix && AIS[tool as AiId].tipo === "imagen";
+  // IA de la herramienta que no está en el plan (en un Mix, la primera que falte).
+  const lockedAi = aiIdsOf(tool).find((id) => !sub.ias.includes(id)) ?? null;
+  const status = lockedAi ? lockedStatus(lockedAi, access) : null;
+  const placeholder =
+    status && !status.usable
+      ? `Desbloquea ${AIS[lockedAi!].nombre} para seguir usándola`
+      : mix
+        ? `Pídele algo a ${AIS[mix.texto].nombre} y ${AIS[mix.imagen].nombre}: texto e imagen en una sola respuesta`
+        : AIS[tool as AiId].placeholder;
   const composerLocked = !!status && !status.usable;
 
-  // Aviso sobre la barra de escritura cuando la IA no está en el plan.
-  const lockedBanner = status && (
+  // Aviso sobre la barra de escritura cuando la IA (o una IA del Mix) no está en el plan.
+  const lockedBanner = status && lockedAi && (
     <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm">
       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
         <Lock className="size-4 shrink-0" aria-hidden />
         <span className="truncate">
-          {AIS[tool].nombre} no está en tu plan ·{" "}
-          {access.accesos[tool]
-            ? `acceso mensual hasta el ${new Date(access.accesos[tool]!).toLocaleDateString("es-CO")}`
-            : (access.pruebas[tool] ?? 0) > 0
-              ? `te ${access.pruebas[tool] === 1 ? "queda 1 prueba" : `quedan ${access.pruebas[tool]} pruebas`} gratis hoy`
+          {AIS[lockedAi].nombre} no está en tu plan ·{" "}
+          {access.accesos[lockedAi]
+            ? `acceso mensual hasta el ${new Date(access.accesos[lockedAi]!).toLocaleDateString("es-CO")}`
+            : (access.pruebas[lockedAi] ?? 0) > 0
+              ? `te ${access.pruebas[lockedAi] === 1 ? "queda 1 prueba" : `quedan ${access.pruebas[lockedAi]} pruebas`} gratis hoy`
               : access.tokens > 0
                 ? `usando tus tokens (${status.label})`
                 : `ya usaste ${PLANS[sub.plan].pruebasDiarias === 1 ? "tu prueba" : "tus pruebas"} de hoy`}
         </span>
       </span>
-      {!access.accesos[tool] && (
-        <Button size="sm" className="shrink-0" onClick={() => setUnlockOpen(true)}>Desbloquear</Button>
+      {!access.accesos[lockedAi] && (
+        <Button size="sm" className="shrink-0" onClick={() => blocked(lockedAi)}>Desbloquear</Button>
       )}
     </div>
   );
@@ -344,6 +390,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
       onRename={renameChat}
       onDelete={(id) => setToDelete({ kind: "chat", id, nombre: chats.find((c) => c.id === id)?.titulo ?? "" })}
       onCreateProject={createProject}
+      onAddToProject={addToProject}
       onRenameProject={renameProject}
       onDeleteProject={(id) => setToDelete({ kind: "proyecto", id, nombre: projects.find((p) => p.id === id)?.nombre ?? "" })}
       onRemoveFromProject={removeFromProject}
@@ -384,6 +431,12 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
               {lockedBanner}
               <Composer ref={composer} placeholder={placeholder} disabled={!!pending || composerLocked} busy={!!pending} onSend={send} />
               <ul className="mx-auto mt-6 grid max-w-xl gap-1 px-1">
+                <li>
+                  <button type="button" onClick={chooseMix} className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[15px] text-foreground/90 transition-colors hover:bg-secondary">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><Layers className="size-4" aria-hidden /></span>
+                    <span><span className="font-medium">Mix: {AIS[sugerido.texto].nombre} + {AIS[sugerido.imagen].nombre}</span> <span className="text-muted-foreground">· texto e imagen listos para publicar</span></span>
+                  </button>
+                </li>
                 {sub.ias.map((id) => (
                   <li key={id}>
                     <button type="button" onClick={() => chooseSuggestion(id)} className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[15px] text-foreground/90 transition-colors hover:bg-secondary">
@@ -401,7 +454,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
               {loadingChat ? (
                 <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-6 animate-spin" aria-label="Cargando chat" /></div>
               ) : (
-                <MessageList messages={messages} pending={pending} onEdit={(id, text) => void edit(id, text)} />
+                <MessageList messages={messages} pending={pending} animateId={animateId} onAnimated={() => setAnimateId(null)} onEdit={(id, text) => void edit(id, text)} onVote={(id, v) => void vote(id, v)} />
               )}
             </div>
             {/* pb extra en pantallas angostas: deja libre la esquina del botón de información */}
@@ -419,7 +472,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
       </main>
 
       <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} token={token} empresa={empresa} ias={sub.ias} userName={userName} userEmail={user.email ?? ""} onEmpresa={setEmpresa} />
-      {locked && <UnlockDialog ai={tool} open={unlockOpen} onOpenChange={setUnlockOpen} token={token} tokens={access.tokens} onBought={() => void refresh()} />}
+      {(unlockAi ?? lockedAi) && <UnlockDialog ai={(unlockAi ?? lockedAi)!} open={unlockOpen} onOpenChange={(o) => { setUnlockOpen(o); if (!o) setUnlockAi(null); }} token={token} tokens={access.tokens} onBought={() => void refresh()} />}
 
       <Dialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <DialogContent className="max-w-sm rounded-xl">

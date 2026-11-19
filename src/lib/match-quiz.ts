@@ -189,3 +189,26 @@ export function rankAis(a: MatchAnswers, empresa?: MatchAnswers | null) {
 export const rankEmpresa = (a: MatchAnswers) => rank(scores(a, EMPRESA_QUIZ));
 
 export const topAis = (a: MatchAnswers, n: number, empresa?: MatchAnswers | null) => rankAis(a, empresa).slice(0, n);
+
+export type Votos = Partial<Record<AiId, { up: number; down: number }>>;
+export type MatchActual = { id: AiId; inicial: number; actual: number; up: number; down: number };
+
+/**
+ * "Tu match": parte del % del test inicial y lo ajusta con los pulgares que la persona da a las respuestas.
+ * Cada voto mueve menos a medida que hay más (con 1 voto ±5 puntos; con 10 a favor, unos +18).
+ */
+export function ajustarMatch(inicial: { id: AiId; pct: number }[], votos: Votos): MatchActual[] {
+  return inicial
+    .map(({ id, pct }) => {
+      const { up = 0, down = 0 } = votos[id] ?? {};
+      const actual = Math.round(Math.min(99, Math.max(35, pct + (25 * (up - down)) / (up + down + 4))));
+      return { id, inicial: pct, actual, up, down };
+    })
+    .sort((x, y) => y.actual - x.actual || y.up - x.up || AI_ORDER.indexOf(x.id) - AI_ORDER.indexOf(y.id));
+}
+
+/** Respuestas de un test en texto ("pregunta: opción, opción"), para la memoria global de las IAs. */
+export function resumenTest(a: unknown, quiz: QuizQuestion[]): string[] {
+  if (!Array.isArray(a) || !validAnswers(a as MatchAnswers, quiz)) return [];
+  return (a as MatchAnswers).map((sel, i) => `${quiz[i]!.q} ${sel.map((o) => quiz[i]!.options[o]!.label).join(", ")}`);
+}

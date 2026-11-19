@@ -151,6 +151,7 @@ export type Database = {
         Row: {
           admin_id: string
           created_at: string
+          descripcion: string | null
           ias: string[]
           id: string
           nombre: string
@@ -161,6 +162,7 @@ export type Database = {
         Insert: {
           admin_id: string
           created_at?: string
+          descripcion?: string | null
           ias?: string[]
           id?: string
           nombre: string
@@ -171,6 +173,7 @@ export type Database = {
         Update: {
           admin_id?: string
           created_at?: string
+          descripcion?: string | null
           ias?: string[]
           id?: string
           nombre?: string
@@ -265,9 +268,11 @@ export type Database = {
           herramienta: string | null
           id: string
           imagen_url: string | null
+          imagen_prompt: string | null
           role: string
           tipo: string
           user_id: string
+          voto: number | null
         }
         Insert: {
           tokens?: number | null
@@ -278,9 +283,11 @@ export type Database = {
           herramienta?: string | null
           id?: string
           imagen_url?: string | null
+          imagen_prompt?: string | null
           role: string
           tipo?: string
           user_id: string
+          voto?: number | null
         }
         Update: {
           tokens?: number | null
@@ -291,9 +298,11 @@ export type Database = {
           herramienta?: string | null
           id?: string
           imagen_url?: string | null
+          imagen_prompt?: string | null
           role?: string
           tipo?: string
           user_id?: string
+          voto?: number | null
         }
         Relationships: []
       }
@@ -325,6 +334,7 @@ export type Database = {
         Row: {
           tokens: number
           created_at: string
+          memoria: string | null
           ias: string[]
           plan: string
           respuestas: Json | null
@@ -334,6 +344,7 @@ export type Database = {
         Insert: {
           tokens?: number
           created_at?: string
+          memoria?: string | null
           ias?: string[]
           plan: string
           respuestas?: Json | null
@@ -343,6 +354,7 @@ export type Database = {
         Update: {
           tokens?: number
           created_at?: string
+          memoria?: string | null
           ias?: string[]
           plan?: string
           respuestas?: Json | null

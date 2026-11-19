@@ -55,22 +55,32 @@ export async function generateText(system: string, turns: Turn[], { model = "gem
  * decide si el mensaje pide una imagen o es conversación, bloquea contenido no apto
  * y escribe el prompt final con el estilo propio de la herramienta, como si fuera esa IA.
  */
-function imageFilterPrompt(tool: Ai) {
-  return `Eres el motor interno de ${tool.nombre} (${tool.proposito}: ${tool.descripcion}). Lee la conversación y decide qué hacer con el ÚLTIMO mensaje del usuario.
+function imageFilterPrompt(tool: Ai, soloImagen: boolean, memoria: string) {
+  const tarea = soloImagen
+    ? `Otra IA ya escribió el texto de la respuesta y te pasa la descripción de la imagen que lo acompaña. Conviértela en el prompt final.
+Responde SOLO con JSON, en una de estas formas:
+{"accion":"imagen","prompt":"..."}
+{"accion":"bloquear"}`
+    : `Lee la conversación y decide qué hacer con el ÚLTIMO mensaje del usuario.
 Responde SOLO con JSON, en una de estas formas:
 {"accion":"imagen","prompt":"..."}
 {"accion":"responder","texto":"..."}
-{"accion":"bloquear"}
+{"accion":"bloquear"}`;
+  return `Eres el motor interno de ${tool.nombre} (${tool.proposito}: ${tool.descripcion}). ${tarea}
 
-- "imagen": el usuario pide crear una imagen o cambiar la anterior. Escribe "prompt" en inglés, completo y autocontenido (sujeto, acción, entorno, composición, estilo, luz, colores, encuadre), de 40 a 120 palabras. Si pide cambios sobre la imagen anterior, reescribe el prompt anterior con esos cambios. Aplica el estilo característico de ${tool.nombre}: ${tool.prompt}. Si el usuario pide otro estilo, respeta el suyo. Si quiere texto dentro de la imagen, inclúyelo literal entre comillas.
-- "responder": es un saludo, una pregunta o conversación que no pide una imagen. Contesta en español, breve y cercano, como ${tool.nombre}, y sugiere una idea de imagen.${identityRule(tool.nombre)}
-- "bloquear": contenido sexual o desnudos, violencia gráfica, odio, actividades ilegales, menores en contextos inapropiados o imitar a una persona real de forma engañosa.`;
+- "imagen": el usuario pide crear una imagen o cambiar la anterior. Escribe "prompt" en inglés, completo y autocontenido (sujeto, acción, entorno, composición, estilo, luz, colores, encuadre), de 40 a 120 palabras. Si pide cambios sobre la imagen anterior, reescribe el prompt anterior con esos cambios. Aplica el estilo característico de ${tool.nombre}: ${tool.prompt}. Si el usuario pide otro estilo, respeta el suyo. Si quiere texto dentro de la imagen, inclúyelo literal entre comillas.${
+    soloImagen
+      ? ""
+      : `
+- "responder": es un saludo, una pregunta o conversación que no pide una imagen. Contesta en español, breve y cercano, como ${tool.nombre}, y sugiere una idea de imagen.${identityRule(tool.nombre)}`
+  }
+- "bloquear": contenido sexual o desnudos, violencia gráfica, odio, actividades ilegales, menores en contextos inapropiados o imitar a una persona real de forma engañosa.${memoria}`;
 }
 
 type FilterDecision = ({ accion: "imagen"; prompt: string } | { accion: "responder"; texto: string } | { accion: "bloquear" }) & { tokens: number };
 
-async function imageFilter(turns: Turn[], tool: Ai): Promise<FilterDecision | "busy"> {
-  const r = await generateText(imageFilterPrompt(tool), turns, { maxOutputTokens: 500, json: true });
+async function imageFilter(turns: Turn[], tool: Ai, soloImagen: boolean, memoria: string): Promise<FilterDecision | "busy"> {
+  const r = await generateText(imageFilterPrompt(tool, soloImagen, memoria), turns, { maxOutputTokens: 500, json: true });
   if (!r.ok) return "busy"; // sin filtro no se genera nada (el modelo de imagen no trae filtro propio)
   try {
     const d = JSON.parse(r.text.replace(/^```(?:json)?|```$/g, "").trim()) as Partial<{ accion: string; prompt: string; texto: string }>;
@@ -94,13 +104,14 @@ export function imageProvider() {
 
 /**
  * Genera una imagen pasando primero por el filtro. `history` = turnos previos del chat (para "hazlo más azul").
- * Puede devolver texto si el mensaje no pedía una imagen.
+ * Puede devolver texto si el mensaje no pedía una imagen, salvo con soloImagen (Mix: el mensaje ya es la descripción).
+ * memoria = memoria global de la persona y su empresa (p. ej. para "un póster para mi empresa").
  */
-export async function generateImage(message: string, history: Turn[] = [], tool: Ai = AIS.midjourney): Promise<ImageResult> {
-  const decision = await imageFilter([...history, { role: "user", text: message }], tool);
+export async function generateImage(message: string, history: Turn[] = [], tool: Ai = AIS.midjourney, { soloImagen = false, memoria = "" } = {}): Promise<ImageResult> {
+  const decision = await imageFilter([...history, { role: "user", text: message }], tool, soloImagen, memoria);
   if (decision === "busy") return { ok: false, busy: true };
   if (decision.accion === "bloquear") return { ok: false, busy: false, blocked: true };
-  if (decision.accion === "responder") return { ok: true, kind: "texto", text: decision.texto, tokens: decision.tokens };
+  if (decision.accion === "responder") return soloImagen ? { ok: false, busy: true } : { ok: true, kind: "texto", text: decision.texto, tokens: decision.tokens };
   const provider = imageProvider();
   try {
     const img = provider === "local" ? await viaLocalQwen(decision.prompt) : provider === "modelscope" ? await viaModelScope(decision.prompt) : await viaGemini(decision.prompt);
