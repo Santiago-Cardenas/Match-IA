@@ -250,10 +250,19 @@ export function MessageList({ messages, pending, animateId, onAnimated, onEdit, 
     end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, pending]);
 
-  // Mientras escribe, baja el scroll solo si la persona sigue al final (si subió a leer, no la mueve).
+  // Mientras escribe (o cuando aparece la imagen de un Mix), baja el scroll solo si la persona seguía al final:
+  // si subió a leer, no la mueve. "pinned" se actualiza con cada scroll de la persona.
+  const pinned = useRef(true);
+  useEffect(() => {
+    const box = root.current?.parentElement;
+    if (!box) return;
+    const onScroll = () => (pinned.current = box.scrollHeight - box.scrollTop - box.clientHeight < 160);
+    box.addEventListener("scroll", onScroll, { passive: true });
+    return () => box.removeEventListener("scroll", onScroll);
+  }, []);
   const follow = useRef(() => {
     const box = root.current?.parentElement;
-    if (box && box.scrollHeight - box.scrollTop - box.clientHeight < 160) box.scrollTop = box.scrollHeight;
+    if (box && pinned.current) box.scrollTop = box.scrollHeight;
   }).current;
 
   return (
