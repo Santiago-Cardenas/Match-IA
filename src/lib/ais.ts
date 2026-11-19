@@ -204,9 +204,9 @@ export function aiIdsOf(value: string | null | undefined): AiId[] {
 
 export const toolName = (value: string | null | undefined) => aiIdsOf(value).map((id) => AIS[id].nombre).join(" + ") || "Matchia";
 
-/** Instrucciones extra para la IA de texto en un Mix: entrega su texto y el prompt de la imagen en JSON. */
-export const mixRule = (imagen: Ai) =>
-  ` En esta respuesta trabajas en equipo con ${imagen.nombre} (${imagen.proposito}), que creará la imagen que acompaña tu texto. Responde SOLO con JSON: {"texto":"...","imagen":"..."}. "texto": tu respuesta completa en Markdown, lista para usar (por ejemplo, el texto de la publicación con su llamado a la acción y hashtags si aplica); no menciones el JSON ni a ${imagen.nombre}. "imagen": el prompt para ${imagen.nombre}, en español, de 30 a 80 palabras: describe la imagen acompañante (sujeto, composición, estilo, colores y luz) de forma coherente con tu texto; si la imagen debe llevar texto escrito, inclúyelo literal entre comillas.`;
+/** Instrucciones extra para la IA de texto en un Mix: entrega su texto y los prompts de las imágenes en JSON. */
+export const mixRule = (imagen: Ai, max: number) =>
+  ` En esta respuesta trabajas en equipo con ${imagen.nombre} (${imagen.proposito}), que creará las imágenes que acompañan tu texto. Responde SOLO con JSON: {"texto":"...","imagenes":[{"para":"...","prompt":"..."}]}. "texto": tu respuesta completa en Markdown, lista para copiar y publicar (por ejemplo, cada publicación con su llamado a la acción y hashtags si aplica); no menciones el JSON ni a ${imagen.nombre}. "imagenes": una imagen por cada publicación o variante que entregues (si das 3 opciones de post, 3 imágenes; si es una sola pieza, 1), o la cantidad que pida el usuario; máximo ${max}. "para": a qué publicación o variante acompaña, con el mismo nombre que usas en el texto (p. ej. "Opción A"); vacío si es una sola. "prompt": el prompt para ${imagen.nombre}, en español, de 30 a 80 palabras: describe esa imagen (sujeto, composición, estilo, colores y luz) de forma coherente con su texto; si debe llevar texto escrito, inclúyelo literal entre comillas.`;
 
 /**
  * Identidad: la IA que responde (Gemini o Qwen) se presenta como la herramienta seleccionada.

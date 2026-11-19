@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { APP_LIMITS, APP_MESSAGES, HISTORY_TURNS, MAX_MESSAGE_CHARS } from "./app-config";
+import { APP_LIMITS, APP_MESSAGES, HISTORY_TURNS, MAX_IMAGENES_MIX, MAX_MESSAGE_CHARS } from "./app-config";
 import { AIS, AI_IDS, aiIdsOf, identityRule, mixRule, toAiId, toMix, type Ai, type AiId, type Mix } from "./ais";
 import { EMPRESA_QUIZ, MATCH_QUIZ, ajustarMatch, rankAis, rankEmpresa, resumenTest, validAnswers, type MatchActual, type MatchAnswers, type Votos } from "./match-quiz";
 import { IMAGE_TOKENS, MES_COP, MES_DIAS, PLANS, TOKEN_PACKS, type PlanId } from "./plans";
@@ -13,8 +13,10 @@ export type ChatMessage = {
   tipo: "texto" | "imagen" | "aviso" | "mix";
   contenido: string;
   imagen_url: string | null;
-  /** Mix: prompt que la IA de texto le pasó a la IA de imagen (interno, no se muestra). */
+  /** Mix antiguo (una imagen): prompt que la IA de texto le pasó a la IA de imagen (interno, no se muestra). */
   imagen_prompt?: string | null;
+  /** Mix: una imagen por publicación o variante; se generan después del texto. */
+  imagenes?: MixImagen[] | null;
   herramienta: string | null;
   /** Pulgar arriba (1) o abajo (-1) del usuario. */
   voto?: number | null;
@@ -22,6 +24,8 @@ export type ChatMessage = {
 };
 
 export type Suscripcion = { plan: PlanId; ias: AiId[]; tokens: number };
+/** Imagen de un Mix. prompt es interno (no se muestra). generando solo existe en el navegador. */
+export type MixImagen = { para: string | null; prompt: string; url: string | null; error?: boolean; generando?: boolean };
 /** Empresa de la cuenta. ias = recomendadas por el test de la empresa; cuentas = afiliadas (incluye invitaciones pendientes). */
 export type Empresa = { id: string; nombre: string; plan: PlanId; rol: "admin" | "miembro"; testHecho: boolean; ias: AiId[]; cuentas: number; descripcion: string | null };
 export type Cuenta = { email: string; nombre: string | null; rol: "admin" | "miembro"; activa: boolean; testHecho: boolean };
@@ -142,10 +146,14 @@ const BLOQUEADA = "Ya usaste tu prueba de hoy de esta IA. Desbloquéala con acce
 async function usage(db: Db, tipo: "texto" | "imagen", userId?: string) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   let q = db.from("messages").select("id", { count: "exact", head: true }).eq("role", "model").gte("created_at", since);
-  q = tipo === "texto" ? q.in("tipo", ["texto", "mix"]) : q.or("tipo.eq.imagen,and(tipo.eq.mix,imagen_url.not.is.null)");
+  q = tipo === "texto" ? q.in("tipo", ["texto", "mix"]) : q.eq("tipo", "imagen");
   if (userId) q = q.eq("user_id", userId);
-  const { count } = await q;
-  return count ?? 0;
+  if (tipo === "texto") return (await q).count ?? 0;
+  let m = db.from("messages").select("imagen_url, imagenes").eq("role", "model").eq("tipo", "mix").gte("created_at", since).limit(2000);
+  if (userId) m = m.eq("user_id", userId);
+  const [{ count }, { data: mixes }] = await Promise.all([q, m]);
+  const enMix = (mixes ?? []).reduce((n, r) => n + (Array.isArray(r.imagenes) ? (r.imagenes as MixImagen[]).filter((i) => i?.url).length : r.imagen_url ? 1 : 0), 0);
+  return (count ?? 0) + enMix;
 }
 
 const token = z.string().min(10).max(4000);
@@ -277,7 +285,7 @@ async function replyAndSave(db: Db, user: User, chatId: string, tool: string, te
   return (data as ChatMessage | null) ?? null;
 }
 
-type Reply = { tipo: "texto" | "imagen" | "aviso" | "mix"; contenido: string; imagen_url?: string | null; imagen_prompt?: string | null; gasto?: number[] };
+type Reply = { tipo: "texto" | "imagen" | "aviso" | "mix"; contenido: string; imagen_url?: string | null; imagenes?: MixImagen[]; gasto?: number[] };
 
 /** Historial de texto del chat, del más antiguo al más reciente; el último es el mensaje del usuario. */
 async function textTurns(db: Db, chatId: string, texto: string) {
@@ -342,9 +350,9 @@ async function answer(db: Db, userId: string, chatId: string, ai: Ai, texto: str
 }
 
 /**
- * Mix: en una sola respuesta, la IA de texto escribe el contenido listo para copiar y el prompt de la imagen
- * acompañante; ese prompt pasa internamente por el filtro de la IA de imagen y se genera la imagen.
- * Si la imagen falla, se entrega el texto igual (sin cobrar la parte de la imagen).
+ * Mix: la IA de texto escribe el contenido listo para copiar y un prompt por cada imagen que lo acompaña
+ * (una por publicación o variante, o las que pida el usuario). La respuesta se guarda con las imágenes pendientes
+ * y el navegador las pide una por una con generarImagenMix, así ninguna petición pasa de un minuto.
  */
 async function answerMix(db: Db, userId: string, chatId: string, mix: Mix, texto: string, memoria: string): Promise<Reply> {
   const aviso = (contenido: string): Reply => ({ tipo: "aviso", contenido });
@@ -355,23 +363,78 @@ async function answerMix(db: Db, userId: string, chatId: string, mix: Mix, texto
   if (imagenMia >= APP_LIMITS.imagenPorUsuario || imagenTodas >= APP_LIMITS.imagenGlobal) return aviso(APP_MESSAGES.limiteImagen);
 
   const gen = await import("./ai.server");
-  const res = await gen.generateText(escritor.prompt + identityRule(escritor.nombre) + mixRule(ilustrador) + memoria, await textTurns(db, chatId, texto), { maxOutputTokens: 1800, json: true });
+  const res = await gen.generateText(
+    escritor.prompt + identityRule(escritor.nombre) + mixRule(ilustrador, MAX_IMAGENES_MIX) + memoria,
+    await textTurns(db, chatId, texto),
+    { maxOutputTokens: 2500, json: true },
+  );
   if (!res.ok) return aviso(res.busy ? APP_MESSAGES.ocupado : APP_MESSAGES.error);
-  let parte: { texto?: unknown; imagen?: unknown } = {};
+  let parte: { texto?: unknown; imagenes?: unknown; imagen?: unknown } = {};
   try {
     parte = JSON.parse(res.text.replace(/^```(?:json)?|```$/g, "").trim()) as typeof parte;
   } catch {
     console.error("Mix: la respuesta de texto no es JSON", res.text.slice(0, 200));
   }
   const contenido = typeof parte.texto === "string" && parte.texto.trim() ? parte.texto.trim() : res.text;
-  const prompt = typeof parte.imagen === "string" ? parte.imagen.trim() : "";
-  if (!prompt) return { tipo: "mix", contenido, imagen_prompt: null, gasto: [res.tokens] };
-
-  const img = await gen.generateImage(prompt, [], ilustrador, { soloImagen: true, memoria });
-  const url = img.ok && img.kind === "imagen" ? await saveImage(db, userId, img.bytes, img.mime) : null;
-  if (!url || !img.ok || img.kind !== "imagen") return { tipo: "mix", contenido, imagen_prompt: prompt, gasto: [res.tokens] };
-  return { tipo: "mix", contenido, imagen_url: url, imagen_prompt: prompt, gasto: [res.tokens, img.tokens + IMAGE_TOKENS] };
+  const crudas = Array.isArray(parte.imagenes) ? parte.imagenes : typeof parte.imagen === "string" ? [{ prompt: parte.imagen }] : [];
+  const imagenes: MixImagen[] = crudas
+    .flatMap((x: { para?: unknown; prompt?: unknown }) => {
+      const prompt = typeof x?.prompt === "string" ? x.prompt.trim().slice(0, 1500) : "";
+      const para = typeof x?.para === "string" && x.para.trim() ? x.para.trim().slice(0, 60) : null;
+      return prompt ? [{ para, prompt, url: null }] : [];
+    })
+    .slice(0, MAX_IMAGENES_MIX);
+  return { tipo: "mix", contenido, imagenes, gasto: [res.tokens] };
 }
+
+export type ImagenMixResult = { ok: true; imagen: MixImagen } | { ok: false; message: string; bloqueada?: AiId };
+
+/**
+ * Genera una imagen pendiente de un Mix (indice = posición en la lista). La primera imagen que sale bien
+ * gasta el acceso de la IA de imagen (plan, mes, prueba o tokens); con tokens, cada imagen descuenta los suyos.
+ */
+export const generarImagenMix = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token, messageId: z.string().uuid(), indice: z.number().int().min(0).max(MAX_IMAGENES_MIX - 1) }).parse(d))
+  .handler(async ({ data }): Promise<ImagenMixResult> => {
+    let ctx;
+    try {
+      ctx = await requireUser(data.token);
+    } catch {
+      return { ok: false, message: "Tu sesión expiró. Vuelve a iniciar sesión." };
+    }
+    const { db, user } = ctx;
+    const { data: msg } = await db.from("messages").select("id, user_id, tipo, herramienta, acceso, imagenes").eq("id", data.messageId).maybeSingle();
+    const mix = toMix(msg?.herramienta);
+    const actual = (msg?.imagenes as MixImagen[] | null)?.[data.indice];
+    if (!msg || msg.user_id !== user.id || msg.tipo !== "mix" || !mix || !actual) return { ok: false, message: "No encontramos esa respuesta." };
+    if (actual.url) return { ok: true, imagen: actual };
+
+    const sub = await getSub(db, user.id);
+    if (!sub) return { ok: false, message: "Activa un plan para usar Matchia." };
+    const [via0, via1] = (msg.acceso ?? "").split("+");
+    const via = (via1 as Via | undefined) || (await resolveAccess(db, user.id, sub, mix.imagen));
+    if (!via || (via === "tokens" && sub.tokens <= 0)) return { ok: false, message: BLOQUEADA, bloqueada: mix.imagen };
+    const [mia, todas] = await Promise.all([usage(db, "imagen", user.id), usage(db, "imagen")]);
+    if (mia >= APP_LIMITS.imagenPorUsuario || todas >= APP_LIMITS.imagenGlobal) return { ok: false, message: APP_MESSAGES.limiteImagen };
+
+    const gen = await import("./ai.server");
+    const img = await gen.generateImage(actual.prompt, [], AIS[mix.imagen], { soloImagen: true, memoria: await memoriaGlobal(db, user) });
+    const url = img.ok && img.kind === "imagen" ? await saveImage(db, user.id, img.bytes, img.mime) : null;
+    const gasto = url && img.ok ? img.tokens + IMAGE_TOKENS : 0;
+
+    // Se vuelve a leer la lista por si otra imagen del mismo Mix se guardó mientras tanto.
+    const { data: fresh } = await db.from("messages").select("imagenes, tokens").eq("id", msg.id).single();
+    const lista = [...((fresh?.imagenes as MixImagen[] | null) ?? [])];
+    const nueva: MixImagen = url ? { para: actual.para, prompt: actual.prompt, url } : { ...actual, error: true };
+    lista[data.indice] = nueva;
+    await db
+      .from("messages")
+      .update({ imagenes: lista, ...(url ? { acceso: `${via0 || "plan"}+${via}`, tokens: (fresh?.tokens ?? 0) + gasto } : {}) })
+      .eq("id", msg.id);
+    if (url && via === "tokens") await db.from("suscripciones").update({ tokens: Math.max(0, sub.tokens - gasto) }).eq("user_id", user.id);
+    if (!url) return { ok: false, message: !img.ok && img.blocked ? APP_MESSAGES.bloqueado : APP_MESSAGES.ocupado };
+    return { ok: true, imagen: nueva };
+  });
 
 // ---------- Votos y "Tu match" ----------
 

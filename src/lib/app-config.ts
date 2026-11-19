@@ -19,3 +19,6 @@ export const APP_MESSAGES = {
   error: "No pudimos generar la respuesta. Intenta de nuevo.",
   bloqueado: "No podemos generar esa imagen. Prueba con otra descripción.",
 };
+
+/** Mix: máximo de imágenes por respuesta (una por cada publicación o variante del texto). */
+export const MAX_IMAGENES_MIX = 4;

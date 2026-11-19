@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { AIS, MIX_DEFAULT, aiIdsOf, mixKey, toMix, toTool, type AiId } from "@/lib/ais";
-import { activarSuscripcion, crearProyecto, editAndResend, getAppInfo, sendChatMessage, votarRespuesta, type ChatMessage, type Empresa, type Suscripcion } from "@/lib/chat.functions";
+import { activarSuscripcion, crearProyecto, editAndResend, generarImagenMix, getAppInfo, sendChatMessage, votarRespuesta, type ChatMessage, type Empresa, type MixImagen, type Suscripcion } from "@/lib/chat.functions";
 import { PLANS, isPlan } from "@/lib/plans";
 import { useSession } from "@/lib/auth";
 import { trackEvent } from "@/lib/tracking";
@@ -111,6 +111,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
   const editFn = useServerFn(editAndResend);
   const projectFn = useServerFn(crearProyecto);
   const voteFn = useServerFn(votarRespuesta);
+  const imagenFn = useServerFn(generarImagenMix);
   const composer = useRef<ComposerHandle>(null);
   const activeChat = useRef<string | undefined>(chatId);
   const skipLoad = useRef<string | null>(null);
@@ -190,8 +191,38 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
 
   function countUse(reply: ChatMessage) {
     const texto = reply.tipo === "texto" || reply.tipo === "mix";
-    const imagen = reply.tipo === "imagen" || (reply.tipo === "mix" && !!reply.imagen_url);
+    const imagen = reply.tipo === "imagen";
     setRestantes((r) => r && { texto: Math.max(0, r.texto - (texto ? 1 : 0)), imagen: Math.max(0, r.imagen - (imagen ? 1 : 0)) });
+  }
+
+  // Mix: después del texto, pide sus imágenes una por una (cada una tarda ~45 s en la IA de imagen).
+  // Si una falla, se detiene; las que faltan quedan con el botón "Generar imagen".
+  const setImagen = (id: string, i: number, fn: (im: MixImagen) => MixImagen) =>
+    setMessages((ms) => ms.map((x) => (x.id === id && x.imagenes ? { ...x, imagenes: x.imagenes.map((im, j) => (j === i ? fn(im) : im)) } : x)));
+
+  async function generarImagenes(m: ChatMessage, indices?: number[]) {
+    const pendientes = indices ?? (m.imagenes ?? []).flatMap((im, i) => (im.url ? [] : [i]));
+    for (const i of pendientes) {
+      setImagen(m.id, i, (im) => ({ ...im, error: false, generando: true }));
+      let res: Awaited<ReturnType<typeof imagenFn>>;
+      try {
+        res = await imagenFn({ data: { token: await token(), messageId: m.id, indice: i } });
+      } catch {
+        res = { ok: false, message: "" };
+      }
+      setImagen(m.id, i, (im) => (res.ok ? res.imagen : { ...im, generando: false, error: true }));
+      if (!res.ok) {
+        blocked(res.bloqueada);
+        break;
+      }
+      setRestantes((r) => r && { ...r, imagen: Math.max(0, r.imagen - 1) });
+    }
+    if (!allIncluded(m.herramienta ?? "")) void refresh();
+  }
+
+  function retryImage(messageId: string, indice: number) {
+    const m = messages.find((x) => x.id === messageId);
+    if (m) void generarImagenes(m, [indice]);
   }
 
   function blocked(ai: AiId | undefined) {
@@ -224,6 +255,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
       setMessages((m) => [...m.filter((x) => x.id !== temp.id), res.user, res.reply]);
       setAnimateId(res.reply.id);
       countUse(res.reply);
+      if (res.reply.tipo === "mix") void generarImagenes(res.reply);
       setChats((cs) => {
         const prev = cs.find((c) => c.id === res.chatId);
         return [{ id: res.chatId, titulo: res.titulo, herramienta, updated_at: new Date().toISOString(), project_id: prev?.project_id ?? null }, ...cs.filter((c) => c.id !== res.chatId)];
@@ -263,6 +295,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
       setMessages((m) => [...m.filter((x) => x.id !== messageId), res.user, res.reply]);
       setAnimateId(res.reply.id);
       countUse(res.reply);
+      if (res.reply.tipo === "mix") void generarImagenes(res.reply);
     } catch {
       setMessages((m) => [...m, localAviso("No pudimos reenviar tu mensaje. Intenta de nuevo.")]);
     } finally {
@@ -454,7 +487,7 @@ function ChatApp({ session, sub, empresa, setEmpresa, token, restantes, setResta
               {loadingChat ? (
                 <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-6 animate-spin" aria-label="Cargando chat" /></div>
               ) : (
-                <MessageList messages={messages} pending={pending} animateId={animateId} onAnimated={() => setAnimateId(null)} onEdit={(id, text) => void edit(id, text)} onVote={(id, v) => void vote(id, v)} />
+                <MessageList messages={messages} pending={pending} animateId={animateId} onAnimated={() => setAnimateId(null)} onEdit={(id, text) => void edit(id, text)} onVote={(id, v) => void vote(id, v)} onRetryImage={retryImage} />
               )}
             </div>
             {/* pb extra en pantallas angostas: deja libre la esquina del botón de información */}

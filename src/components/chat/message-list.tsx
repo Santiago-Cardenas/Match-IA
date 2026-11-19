@@ -7,7 +7,7 @@ import { AiIcon } from "@/components/ai-icon";
 import { Button } from "@/components/ui/button";
 import { AIS, aiIdsOf, toMix, toolName } from "@/lib/ais";
 import { MAX_MESSAGE_CHARS } from "@/lib/app-config";
-import type { ChatMessage } from "@/lib/chat.functions";
+import type { ChatMessage, MixImagen } from "@/lib/chat.functions";
 import { cn } from "@/lib/utils";
 
 function AiLabel({ herramienta }: { herramienta: string | null }) {
@@ -105,14 +105,66 @@ function Votes({ m, onVote }: { m: ChatMessage; onVote: (id: string, voto: -1 | 
   );
 }
 
-function ModelMessage({ m, animate, onTick, onAnimated, onVote }: { m: ChatMessage; animate: boolean; onTick: () => void; onAnimated: () => void; onVote: (id: string, voto: -1 | 0 | 1) => void }) {
+/**
+ * Imágenes de un Mix: una por publicación o variante, cada una con su etiqueta ("Opción A") y su descarga.
+ * Se van llenando a medida que la IA de imagen las crea; si una falla, se puede volver a pedir.
+ */
+function MixImages({ m, onTick, onRetry }: { m: ChatMessage; onTick: () => void; onRetry: (messageId: string, indice: number) => void }) {
+  const mix = toMix(m.herramienta);
+  const ilustrador = mix ? AIS[mix.imagen].nombre : "La IA de imagen";
+  // Respuestas Mix anteriores guardaban una sola imagen.
+  const lista: MixImagen[] = m.imagenes ?? (m.imagen_url ? [{ para: null, prompt: "", url: m.imagen_url }] : []);
+  if (!lista.length) {
+    return (
+      <p className="flex items-start gap-2 rounded-xl border border-[#FFB449]/40 bg-[#FFB449]/10 px-4 py-3 text-sm text-foreground">
+        <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#FFB449]" aria-hidden />
+        {ilustrador} no pudo crear la imagen esta vez. Pide de nuevo en unos segundos y se genera con el texto.
+      </p>
+    );
+  }
+  const varias = lista.length > 1;
+  return (
+    <ul className={cn("grid gap-3", varias ? "sm:grid-cols-2" : "max-w-md")}>
+      {lista.map((img, i) => (
+        <li key={i} className="flex flex-col gap-1.5">
+          {(varias || img.para) && <p className="text-xs font-semibold text-muted-foreground">{img.para || `Imagen ${i + 1}`}</p>}
+          {img.url ? (
+            <>
+              <img src={img.url} alt={img.para ? `Imagen para ${img.para}` : "Imagen que acompaña el texto"} loading="lazy" onLoad={onTick} className="w-full rounded-xl border border-border" />
+              <a href={img.url} target="_blank" rel="noreferrer" download className={cn(actionBtn, "-ml-2 self-start")}>
+                <Download className="size-3.5" aria-hidden /> Descargar
+              </a>
+            </>
+          ) : img.generando ? (
+            <div role="status" className="flex aspect-square w-full animate-pulse items-center justify-center rounded-xl border border-border bg-surface px-6 text-center text-sm text-muted-foreground">
+              {ilustrador} está creando {varias ? `la imagen ${i + 1} de ${lista.length}` : "la imagen"}…
+            </div>
+          ) : (
+            <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-6 text-center text-sm text-muted-foreground">
+              {img.error ? `${ilustrador} no pudo crear esta imagen.` : "Imagen pendiente."}
+              <Button size="sm" variant="secondary" onClick={() => onRetry(m.id, i)}>Generar imagen</Button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ModelMessage({ m, animate, onTick, onAnimated, onVote, onRetryImage }: {
+  m: ChatMessage;
+  animate: boolean;
+  onTick: () => void;
+  onAnimated: () => void;
+  onVote: (id: string, voto: -1 | 0 | 1) => void;
+  onRetryImage: (messageId: string, indice: number) => void;
+}) {
   const [typing, setTyping] = useState(animate && (m.tipo === "texto" || m.tipo === "mix"));
   const done = () => {
     setTyping(false);
     onAnimated();
   };
   const text = typing ? <Typewriter text={m.contenido} onTick={onTick} onDone={done} /> : <Markdown text={m.contenido} />;
-  const mix = toMix(m.herramienta);
   const canVote = m.tipo !== "aviso" && !m.id.startsWith("aviso-");
 
   return (
@@ -124,21 +176,11 @@ function ModelMessage({ m, animate, onTick, onAnimated, onVote }: { m: ChatMessa
           <img src={m.imagen_url} alt="Imagen generada" loading="lazy" className="w-full rounded-xl border border-border" />
         </figure>
       )}
-      {/* Mix: el texto listo para copiar y la imagen que lo acompaña, en la misma respuesta */}
+      {/* Mix: el texto listo para copiar y las imágenes que lo acompañan, en la misma respuesta */}
       {m.tipo === "mix" && (
         <>
           {text}
-          {!typing &&
-            (m.imagen_url ? (
-              <figure className="w-full max-w-md">
-                <img src={m.imagen_url} alt="Imagen que acompaña el texto" loading="lazy" onLoad={onTick} className="w-full rounded-xl border border-border" />
-              </figure>
-            ) : (
-              <p className="flex items-start gap-2 rounded-xl border border-[#FFB449]/40 bg-[#FFB449]/10 px-4 py-3 text-sm text-foreground">
-                <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#FFB449]" aria-hidden />
-                {mix ? AIS[mix.imagen].nombre : "La IA de imagen"} no pudo crear la imagen esta vez. Pide de nuevo en unos segundos y se genera con el texto.
-              </p>
-            ))}
+          {!typing && <MixImages m={m} onTick={onTick} onRetry={onRetryImage} />}
         </>
       )}
       {m.tipo === "aviso" && (
@@ -149,7 +191,7 @@ function ModelMessage({ m, animate, onTick, onAnimated, onVote }: { m: ChatMessa
       {canVote && !typing && (
         <div className="-ml-2 flex flex-wrap items-center gap-0.5">
           {(m.tipo === "texto" || m.tipo === "mix") && <CopyButton text={m.contenido} label={m.tipo === "mix" ? "Copiar texto" : "Copiar"} />}
-          {(m.tipo === "imagen" || m.tipo === "mix") && m.imagen_url && <DownloadLink url={m.imagen_url} />}
+          {m.tipo === "imagen" && m.imagen_url && <DownloadLink url={m.imagen_url} />}
           <Votes m={m} onVote={onVote} />
         </div>
       )}
@@ -215,7 +257,7 @@ function Pending({ herramienta }: { herramienta: string }) {
   if (mix) {
     return (
       <p className="flex animate-pulse items-center gap-2 py-2 text-sm text-muted-foreground">
-        {AIS[mix.texto].nombre} está escribiendo y {AIS[mix.imagen].nombre} creará la imagen… puede tardar hasta un minuto
+        {AIS[mix.texto].nombre} está escribiendo; después {AIS[mix.imagen].nombre} creará las imágenes…
       </p>
     );
   }
@@ -235,7 +277,7 @@ function Pending({ herramienta }: { herramienta: string }) {
   );
 }
 
-export function MessageList({ messages, pending, animateId, onAnimated, onEdit, onVote }: {
+export function MessageList({ messages, pending, animateId, onAnimated, onEdit, onVote, onRetryImage }: {
   messages: ChatMessage[];
   pending: { herramienta: string } | null;
   /** Respuesta recién llegada: se muestra como si se fuera escribiendo. */
@@ -243,6 +285,7 @@ export function MessageList({ messages, pending, animateId, onAnimated, onEdit, 
   onAnimated: () => void;
   onEdit: (id: string, text: string) => void;
   onVote: (id: string, voto: -1 | 0 | 1) => void;
+  onRetryImage: (messageId: string, indice: number) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -271,7 +314,7 @@ export function MessageList({ messages, pending, animateId, onAnimated, onEdit, 
         m.role === "user" ? (
           <UserMessage key={m.id} m={m} canEdit={!pending && !m.id.startsWith("tmp-")} onEdit={onEdit} />
         ) : (
-          <ModelMessage key={m.id} m={m} animate={m.id === animateId} onTick={follow} onAnimated={onAnimated} onVote={onVote} />
+          <ModelMessage key={m.id} m={m} animate={m.id === animateId} onTick={follow} onAnimated={onAnimated} onVote={onVote} onRetryImage={onRetryImage} />
         ),
       )}
       {pending && (

@@ -269,6 +269,7 @@ export type Database = {
           id: string
           imagen_url: string | null
           imagen_prompt: string | null
+          imagenes: Json | null
           role: string
           tipo: string
           user_id: string
@@ -284,6 +285,7 @@ export type Database = {
           id?: string
           imagen_url?: string | null
           imagen_prompt?: string | null
+          imagenes?: Json | null
           role: string
           tipo?: string
           user_id: string
@@ -299,6 +301,7 @@ export type Database = {
           id?: string
           imagen_url?: string | null
           imagen_prompt?: string | null
+          imagenes?: Json | null
           role?: string
           tipo?: string
           user_id?: string
